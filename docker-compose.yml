@@ -1,0 +1,54 @@
+# Containers cannot reach the host's "localhost", so they read DOCKER_DATABASE_URL instead of
+# DATABASE_URL. Default: the Postgres already running on the host at port 5433.
+#   docker compose up --build
+#
+# Standalone (fresh clone, no host database): also start a bundled Postgres.
+#   DOCKER_DATABASE_URL=postgresql+asyncpg://newsroom:newsroom@db:5432/newsroom \
+#     docker compose --profile db up --build
+
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: ${DOCKER_DATABASE_URL:?Set DOCKER_DATABASE_URL in .env}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+
+  web:
+    <<: *app
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "newsroom.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  db:
+    image: postgres:18
+    profiles: ["db"]
+    environment:
+      POSTGRES_USER: newsroom
+      POSTGRES_PASSWORD: newsroom
+      POSTGRES_DB: newsroom
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsroom"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

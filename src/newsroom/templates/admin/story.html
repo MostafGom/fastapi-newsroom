@@ -1,0 +1,190 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ story.current_revision.content.title }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<div class="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+  <h1 class="text-2xl font-bold">{{ story.current_revision.content.title }}</h1>
+  <p class="text-sm text-muted">{{ _("locale." ~ story.locale) }} · {{ _("desk.status." ~ story.status.value) }}</p>
+</div>
+{% if notice == "saved" %}<p class="mb-4" role="status">{{ _("desk.saved") }}</p>{% endif %}
+{% if notice == "moved" %}<p class="mb-4" role="status">{{ _("desk.moved") }}</p>{% endif %}
+{% if notice == "created" %}<p class="mb-4" role="status">{{ _("desk.created") }}</p>{% endif %}
+{% if notice == "restored" %}<p class="mb-4" role="status">{{ _("desk.restored") }}</p>{% endif %}
+{% if notice == "slug" %}<p class="mb-4" role="status">{{ _("desk.slug_changed") }}</p>{% endif %}
+{% if notice == "corrected" %}<p class="mb-4" role="status">{{ _("desk.corrected") }}</p>{% endif %}
+{% if error %}<p class="mb-4 text-accent" role="alert">{{ error }}</p>{% endif %}
+{% if article.localizations|length > 1 %}
+  <nav class="mb-4 flex gap-3 text-sm" aria-label="{{ _('desk.other_languages') }}">
+    {% for item in article.localizations %}
+      <a href="/admin/stories/{{ item.id }}" {% if item.id == story.id %}class="font-bold" aria-current="page"{% endif %}>{{ _("locale." ~ item.locale) }}</a>
+    {% endfor %}
+  </nav>
+{% endif %}
+{% if story.status.value == "published" %}
+  <p class="mb-4 text-sm"><a href="/{{ story.locale }}/article/{{ story.slug }}">{{ _("desk.public") }}</a></p>
+{% endif %}
+{% if can_change_slug %}
+  <form class="mb-4 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/slug">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="grid gap-1">{{ _("desk.slug") }}
+      <input class="border border-line px-2 py-1" name="slug" required dir="ltr" value="{{ story.slug }}">
+    </label>
+    <button class="border border-line px-4 py-2" type="submit">{{ _("desk.change_slug") }}</button>
+  </form>
+{% else %}
+  <p class="mb-4 text-sm text-muted" dir="ltr">{{ story.slug }}</p>
+{% endif %}
+<form class="grid gap-3" method="post" action="/admin/stories/{{ story.id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="base_revision_id" value="{{ story.current_revision.id }}">
+  <input type="hidden" name="editor_dir" value="{{ editor_dir }}">
+  <label class="grid gap-1">{{ _("desk.title") }}
+    <input class="border border-line px-2 py-1" name="title" required value="{{ story.current_revision.content.title }}">
+  </label>
+  <label class="grid gap-1">{{ _("desk.subtitle") }}
+    <input class="border border-line px-2 py-1" name="subtitle" value="{{ story.current_revision.content.subtitle or '' }}">
+  </label>
+  <label class="grid gap-1">{{ _("desk.excerpt") }}
+    <textarea class="border border-line px-2 py-1" name="excerpt" rows="2">{{ story.current_revision.content.excerpt or '' }}</textarea>
+  </label>
+  {% include "admin/partials/richtext.html" %}
+  <div class="flex gap-3">
+    <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.save") }}</button>
+    <button class="border border-line px-4 py-2" type="button"
+            hx-post="/admin/editor/preview" hx-target="#preview" hx-swap="innerHTML" hx-include="closest form">{{ _("editor.preview") }}</button>
+  </div>
+</form>
+<section id="preview" class="mt-6" aria-live="polite"></section>
+{% if story.corrections or can_correct %}
+<section class="mt-8 rounded-md border border-line bg-card p-5">
+  <h2 class="font-bold">{{ _("desk.correction") }}</h2>
+  {% if story.corrections %}
+    <ul class="mt-3 grid gap-2">
+      {% for note in story.corrections %}
+        <li><strong>{{ _("correction." ~ note.kind.value) }}.</strong> {{ note.text }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if can_correct %}
+    <form class="mt-3 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/corrections">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="grid gap-1">{{ _("desk.correction") }}
+        <select class="border border-line px-2 py-1" name="kind">
+          {% for kind in correction_kinds %}
+            <option value="{{ kind.value }}">{{ _("correction." ~ kind.value) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="grid gap-1">{{ _("desk.reason") }}
+        <textarea class="border border-line px-2 py-1" name="text" rows="3" required></textarea>
+      </label>
+      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.add_correction") }}</button>
+    </form>
+  {% endif %}
+</section>
+{% endif %}
+<section class="mt-8 rounded-md border border-line bg-card p-5">
+  <h2 class="font-bold">{{ _("desk.actions") }}</h2>
+  {% if actions %}
+    <form class="mt-3 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/transition">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="lock_version" value="{{ story.lock_version }}">
+      <label class="grid gap-1">{{ _("desk.actions") }}
+        <select class="border border-line px-2 py-1" name="action" required>
+          {% for action in actions %}
+            <option value="{{ action.value }}">{{ _("desk.action." ~ action.value) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="grid gap-1">{{ _("desk.reason") }}
+        <textarea class="border border-line px-2 py-1" name="reason" rows="2"></textarea>
+      </label>
+      <label class="grid gap-1">{{ _("desk.publish_at") }}
+        <input class="border border-line px-2 py-1" type="datetime-local" name="publish_at">
+      </label>
+      <label class="grid gap-1">{{ _("desk.takedown_label") }}
+        <select class="border border-line px-2 py-1" name="takedown_reason">
+          <option value=""></option>
+          {% for reason in takedown_reasons %}
+            <option value="{{ reason.value }}">{{ _("desk.takedown." ~ reason.value) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.apply") }}</button>
+    </form>
+  {% else %}
+    <p class="mt-2 text-muted">{{ _("desk.none_for_you") }}</p>
+  {% endif %}
+</section>
+<section class="mt-8 rounded-md border border-line bg-card p-5">
+  <h2 class="font-bold">{{ _("desk.history") }}</h2>
+  {% if diff %}
+    <ul class="mt-3 grid gap-2 text-sm">
+      {% for change in diff.fields %}
+        <li>
+          <code>{{ change.field }}</code>
+          {% if change.field.startswith("body") %}
+            {{ _("desk.diff.block") }}
+          {% else %}
+            <span class="text-muted">{{ change.before or "—" }}</span>
+            → {{ change.after or "—" }}
+          {% endif %}
+        </li>
+      {% else %}
+        <li class="text-muted">{{ _("desk.diff.empty") }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  <ul class="mt-3 grid gap-2">
+    {% for rev in revisions %}
+      <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+        <span>{{ rev.revision_no }}. {{ rev.title }}
+          <span class="text-sm text-muted">{{ rev.kind.value }}</span>
+          {% if rev.is_current %}<span class="text-sm">{{ _("desk.current") }}</span>{% endif %}
+          {% if rev.is_published %}<span class="text-sm">{{ _("desk.live") }}</span>{% endif %}
+        </span>
+        <span class="flex gap-3 text-sm">
+          {% if not rev.is_current %}
+            <a href="/admin/stories/{{ story.id }}?compare={{ rev.id }}">{{ _("desk.compare") }}</a>
+          {% endif %}
+          {% if can_restore and not rev.is_current %}
+            <form method="post" action="/admin/stories/{{ story.id }}/revisions/{{ rev.id }}/restore">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="base_revision_id" value="{{ story.current_revision.id }}">
+              <button type="submit">{{ _("desk.restore") }}</button>
+            </form>
+          {% endif %}
+        </span>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% if missing_locales %}
+  <section class="mt-8" x-data="{ open: false }">
+    <button type="button" class="font-bold" @click="open = !open">{{ _("desk.translation") }}</button>
+    <form class="mt-3 grid gap-3" method="post" action="/admin/stories/{{ story.article_id }}/localizations" x-show="open" x-cloak>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="grid gap-1">{{ _("desk.locale") }}
+        <select class="border border-line px-2 py-1" name="locale">
+          {% for code in missing_locales %}
+            <option value="{{ code }}">{{ _("locale." ~ code) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="grid gap-1">{{ _("desk.slug") }}
+        <input class="border border-line px-2 py-1" name="slug" required dir="ltr">
+      </label>
+      <label class="grid gap-1">{{ _("desk.title") }}
+        <input class="border border-line px-2 py-1" name="title" required>
+      </label>
+      <label class="grid gap-1">{{ _("desk.excerpt") }}
+        <textarea class="border border-line px-2 py-1" name="excerpt" rows="2"></textarea>
+      </label>
+      <div class="overflow-hidden rounded-md border border-line bg-card" data-richtext data-dir="{{ translation_dir }}" data-placeholder="{{ _('editor.placeholder') }}">
+        <div data-editor class="min-h-40"></div>
+        <textarea class="hidden" name="body">{{ empty_body }}</textarea>
+      </div>
+      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.add_translation") }}</button>
+    </form>
+  </section>
+{% endif %}
+{% endblock %}

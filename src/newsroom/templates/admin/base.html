@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-card px-6 py-4" x-data="{ open: false }">
+  <a class="text-xl font-bold text-accent no-underline" href="/admin/">{{ _("admin.title") }}</a>
+  <nav class="flex flex-wrap items-center gap-4 text-sm">
+    {% if principal %}
+      <a href="/admin/stories/new">{{ _("desk.new") }}</a>
+      {% if principal.grants.has_anywhere(perms.SECTION_MANAGE) %}
+        <a href="/admin/sections">{{ _("manage.sections") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.TAG_MANAGE) %}
+        <a href="/admin/tags">{{ _("manage.tags") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.USER_READ) %}
+        <a href="/admin/users">{{ _("manage.users") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.AUDIT_READ) %}
+        <a href="/admin/audit">{{ _("manage.audit") }}</a>
+      {% endif %}
+      <a href="/admin/editor">{{ _("editor.preview") }}</a>
+    {% endif %}
+    {% if principal %}
+    <div class="relative">
+      <button type="button" @click="open = !open" :aria-expanded="open">{{ principal.user.display_name or principal.user.email }}</button>
+      <div class="absolute end-0 z-10 mt-1 border border-line bg-card p-2" x-show="open" x-cloak @click.outside="open = false">
+        <form method="post" action="/admin/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit">{{ _("admin.logout") }}</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </nav>
+</header>
+<main class="mx-auto max-w-5xl px-6 py-6">
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}

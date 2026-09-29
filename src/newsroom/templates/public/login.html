@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ _("account.login") }} · {{ _("site.title") }}{% endblock %}
+{% block body %}
+<main class="mx-auto max-w-sm px-6 py-10">
+  <form class="grid gap-3 rounded-md border border-line bg-card p-5" method="post">
+    <h1 class="text-xl font-bold">{{ _("account.login") if mode == "login" else _("account.register") }}</h1>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if error %}<p class="text-accent" role="alert">{{ _(error) }}</p>{% endif %}
+    {% if mode == "register" %}
+      <label class="grid gap-1">{{ _("account.name") }}
+        <input class="border border-line px-2 py-1" name="display_name">
+      </label>
+    {% endif %}
+    <label class="grid gap-1">{{ _("admin.login.email") }}
+      <input class="border border-line px-2 py-1" type="email" name="email" required dir="ltr">
+    </label>
+    <label class="grid gap-1">{{ _("admin.login.password") }}
+      <input class="border border-line px-2 py-1" type="password" name="password" required dir="ltr">
+    </label>
+    <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("account.login") if mode == "login" else _("account.register") }}</button>
+  </form>
+  <p class="mt-4 text-sm">
+    {% if mode == "login" %}
+      <a href="/{{ locale }}/register">{{ _("account.register") }}</a>
+    {% else %}
+      <a href="/{{ locale }}/login">{{ _("account.login") }}</a>
+    {% endif %}
+  </p>
+</main>
+{% endblock %}

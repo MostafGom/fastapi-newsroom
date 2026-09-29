@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ status }} · {{ app_name }}{% endblock %}
+{% block body %}
+<main class="mx-auto max-w-5xl px-6 py-10">
+  <h1 class="text-3xl font-bold">{{ status }}</h1>
+  <p>{{ _("error." ~ status) if _("error." ~ status) != "error." ~ status else title }}</p>
+  {% if detail %}<p class="text-muted">{{ detail }}</p>{% endif %}
+  <p class="mt-4"><a class="text-accent" href="/">{{ _("error.home") }}</a></p>
+</main>
+{% endblock %}

@@ -1,0 +1,140 @@
+import json
+from typing import Annotated
+from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+
+from newsroom.articles.body import InvalidBody, render_body
+from newsroom.auth.dependencies import (
+    OptionalStaff,
+    SettingsDep,
+    clear_session_cookie,
+    csrf_protect_web,
+    set_session_cookie,
+)
+from newsroom.auth.schemas import Audience
+from newsroom.auth.service import AuthService, InvalidCredentials
+from newsroom.authz.dependencies import CurrentStaff
+from newsroom.core.db import DbSession
+from newsroom.web.admin.desk import story_rows
+from newsroom.web.templating import templates
+
+router = APIRouter(
+    prefix="/admin", dependencies=[Depends(csrf_protect_web)], include_in_schema=False
+)
+
+
+def safe_next(target: str | None) -> str:
+    """Only allow same-site relative redirects into the dashboard."""
+    if not target:
+        return "/admin/"
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc or not target.startswith("/admin"):
+        return "/admin/"
+    return target
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_form(request: Request, staff: OptionalStaff, next: str | None = None) -> Response:
+    if staff is not None:
+        return RedirectResponse(safe_next(next), status_code=303)
+    return templates.TemplateResponse(request, "admin/login.html", {"next": safe_next(next)})
+
+
+@router.post("/login", response_class=HTMLResponse)
+async def login_submit(
+    request: Request,
+    db: DbSession,
+    settings: SettingsDep,
+    email: Annotated[str, Form(max_length=320)],
+    password: Annotated[str, Form(max_length=1024)],
+    next: Annotated[str | None, Form()] = None,
+) -> Response:
+    try:
+        issued = await AuthService(db, settings).login(
+            email,
+            password,
+            Audience.STAFF,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except InvalidCredentials:
+        return templates.TemplateResponse(
+            request,
+            "admin/login.html",
+            {"next": safe_next(next), "email": email, "error": "admin.login.invalid"},
+            status_code=401,
+        )
+    destination = safe_next(next)
+    if request.headers.get("hx-request") == "true":
+        response: Response = Response(status_code=204, headers={"HX-Redirect": destination})
+    else:
+        response = RedirectResponse(destination, status_code=303)
+    set_session_cookie(response, settings, Audience.STAFF, issued.token, issued.session.expires_at)
+    return response
+
+
+@router.post("/logout")
+async def logout(db: DbSession, settings: SettingsDep, staff: OptionalStaff) -> Response:
+    if staff is not None:
+        await AuthService(db, settings).logout(staff.session)
+    response = RedirectResponse("/admin/login", status_code=303)
+    clear_session_cookie(response, settings, Audience.STAFF)
+    return response
+
+
+def editor_direction(value: str | None) -> str:
+    return "ltr" if value == "ltr" else "rtl"
+
+
+@router.get("/editor", response_class=HTMLResponse)
+async def editor_page(
+    request: Request, staff: CurrentStaff, dir: str | None = None
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "admin/editor.html", {"staff": staff, "editor_dir": editor_direction(dir)}
+    )
+
+
+@router.post("/editor/preview", response_class=HTMLResponse)
+async def editor_preview(
+    request: Request,
+    staff: CurrentStaff,
+    body: Annotated[str, Form()],
+    editor_dir: Annotated[str, Form()] = "rtl",
+) -> HTMLResponse:
+    direction = editor_direction(editor_dir)
+    try:
+        html = render_body(json.loads(body))
+    except (json.JSONDecodeError, InvalidBody) as exc:
+        detail = exc.detail if isinstance(exc, InvalidBody) else "Body is not valid JSON"
+        return templates.TemplateResponse(
+            request,
+            "admin/partials/body_preview.html",
+            {"error": detail, "editor_dir": direction},
+            status_code=422,
+        )
+    return templates.TemplateResponse(
+        request,
+        "admin/partials/body_preview.html",
+        {"html": html, "editor_dir": direction, "staff": staff},
+    )
+
+
+@router.get("/", response_class=HTMLResponse)
+async def dashboard(
+    request: Request, staff: CurrentStaff, db: DbSession, notice: str | None = None
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "admin/dashboard.html",
+        {
+            "staff": staff,
+            "roles": sorted(staff.grants.role_keys),
+            "permissions": sorted(staff.grants.all_permissions()),
+            "stories": await story_rows(staff, db),
+            "notice": notice,
+            "detail": request.query_params.get("detail"),
+        },
+    )

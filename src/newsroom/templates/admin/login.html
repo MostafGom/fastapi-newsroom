@@ -1,0 +1,8 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("admin.login.title") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<section class="mx-auto max-w-sm rounded-md border border-line bg-card p-5" id="login-card">
+  <h1 class="mb-4 text-xl font-bold">{{ _("admin.login.title") }}</h1>
+  {% include "admin/partials/login_form.html" %}
+</section>
+{% endblock %}
