@@ -2,16 +2,18 @@
 {% block title %}{{ _("manage.audit") }} · {{ _("admin.title") }}{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold">{{ _("manage.audit") }}</h1>
-<form class="my-4 flex flex-wrap items-baseline gap-3" method="get" action="/admin/audit">
-  <label class="grid gap-1">{{ _("manage.action") }}
-    <input class="border border-line px-2 py-1" name="action" value="{{ filters.action }}" dir="ltr">
+<p class="lede">{{ _("guide.audit") }}</p>
+<form class="form-row my-4" method="get" action="/admin/audit">
+  <label class="field">{{ _("manage.action") }}
+    <input name="action" value="{{ filters.action }}" dir="ltr">
   </label>
-  <label class="grid gap-1">{{ _("manage.entity") }}
-    <input class="border border-line px-2 py-1" name="entity_type" value="{{ filters.entity_type }}" dir="ltr">
+  <label class="field">{{ _("manage.entity") }}
+    <input name="entity_type" value="{{ filters.entity_type }}" dir="ltr">
   </label>
-  <button class="border border-line px-4 py-2" type="submit">{{ _("manage.filter") }}</button>
+  <button class="btn-line" type="submit">{{ _("manage.filter") }}</button>
 </form>
 {% if events %}
+<section class="panel">
   <ul class="grid gap-2">
     {% for event in events %}
       <li class="border-b border-line py-2">
@@ -26,6 +28,7 @@
   {% if next_url %}
     <p class="mt-4"><a href="{{ next_url }}">{{ _("manage.more") }}</a></p>
   {% endif %}
+</section>
 {% else %}
   <p class="text-muted">{{ _("manage.no_events") }}</p>
 {% endif %}

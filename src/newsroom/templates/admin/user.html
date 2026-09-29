@@ -6,25 +6,25 @@
 <p class="mt-2 text-sm text-muted">{{ _("manage.kind." ~ account.kind.value) }} · {{ _("manage.status." ~ account.status.value) }}</p>
 {% include "admin/partials/notice.html" %}
 {% if can_manage %}
-<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/users/{{ account.id }}">
+<form class="form panel my-4" method="post" action="/admin/users/{{ account.id }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="grid gap-1">{{ _("manage.name") }}
-    <input class="border border-line px-2 py-1" name="display_name" value="{{ account.display_name or '' }}">
+  <label class="field">{{ _("manage.name") }}
+    <input name="display_name" value="{{ account.display_name or '' }}">
   </label>
-  <label class="grid gap-1">{{ _("manage.status") }}
-    <select class="border border-line px-2 py-1" name="status">
+  <label class="field">{{ _("manage.status") }}
+    <select name="status">
       {% for status in statuses %}
         <option value="{{ status.value }}" {% if account.status.value == status.value %}selected{% endif %}>{{ _("manage.status." ~ status.value) }}</option>
       {% endfor %}
     </select>
   </label>
-  <label class="grid gap-1">{{ _("manage.job_title") }}
-    <input class="border border-line px-2 py-1" name="job_title">
+  <label class="field">{{ _("manage.job_title") }}
+    <input name="job_title">
   </label>
-  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.save") }}</button>
+  <button class="btn" type="submit">{{ _("manage.save") }}</button>
 </form>
 {% endif %}
-<section class="my-4 rounded-md border border-line bg-card p-5">
+<section class="panel my-4">
   <h2 class="font-bold">{{ _("manage.roles") }}</h2>
   {% if grants %}
     <ul class="mt-3 grid gap-2">
@@ -34,7 +34,7 @@
           {% if can_assign %}
             <form method="post" action="/admin/users/{{ account.id }}/roles/{{ grant.id }}/revoke">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="border border-line px-4 py-2" type="submit">{{ _("manage.revoke") }}</button>
+              <button class="btn-line" type="submit">{{ _("manage.revoke") }}</button>
             </form>
           {% endif %}
         </li>
@@ -44,24 +44,24 @@
     <p class="mt-2 text-muted">{{ _("admin.dashboard.no_roles") }}</p>
   {% endif %}
   {% if can_assign and roles %}
-    <form class="mt-4 grid gap-3" method="post" action="/admin/users/{{ account.id }}/roles">
+    <form class="form mt-4" method="post" action="/admin/users/{{ account.id }}/roles">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label class="grid gap-1">{{ _("manage.grant") }}
-        <select class="border border-line px-2 py-1" name="role_key" required>
+      <label class="field">{{ _("manage.grant") }}
+        <select name="role_key" required>
           {% for role in roles %}
             <option value="{{ role.key }}">{{ role.name }}</option>
           {% endfor %}
         </select>
       </label>
-      <label class="grid gap-1">{{ _("manage.section_scope") }}
-        <select class="border border-line px-2 py-1" name="section_id">
+      <label class="field">{{ _("manage.section_scope") }}
+        <select name="section_id">
           <option value="">{{ _("manage.global") }}</option>
           {% for section in sections %}
             <option value="{{ section.id }}">{{ section.key }}</option>
           {% endfor %}
         </select>
       </label>
-      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.grant") }}</button>
+      <button class="btn" type="submit">{{ _("manage.grant") }}</button>
     </form>
   {% endif %}
 </section>

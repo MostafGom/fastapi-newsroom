@@ -6,22 +6,22 @@
   {% if mode == "register" and not registration_open %}
     <p>{{ _("account.registration_closed") }}</p>
   {% else %}
-  <form class="grid gap-3 border border-line bg-card p-5" method="post">
+  <form class="form border border-line bg-card p-5" method="post">
     <h1 class="text-2xl">{{ _("account.login") if mode == "login" else _("account.register") }}</h1>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     {% if error %}<p class="text-accent" role="alert">{{ _(error) }}</p>{% endif %}
     {% if mode == "register" %}
-      <label class="grid gap-1 font-ui text-sm">{{ _("account.name") }}
+      <label class="field">{{ _("account.name") }}
         <input name="display_name">
       </label>
     {% endif %}
-    <label class="grid gap-1 font-ui text-sm">{{ _("admin.login.email") }}
+    <label class="field">{{ _("admin.login.email") }}
       <input type="email" name="email" required dir="ltr">
     </label>
-    <label class="grid gap-1 font-ui text-sm">{{ _("admin.login.password") }}
+    <label class="field">{{ _("admin.login.password") }}
       <input type="password" name="password" required dir="ltr">
     </label>
-    <button type="submit">{{ _("account.login") if mode == "login" else _("account.register") }}</button>
+    <button class="btn" type="submit">{{ _("account.login") if mode == "login" else _("account.register") }}</button>
   </form>
   {% endif %}
   <p class="mt-4 font-ui text-sm">

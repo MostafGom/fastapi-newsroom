@@ -4,9 +4,9 @@
 {% include "public/partials/header.html" %}
 <main class="mx-auto max-w-5xl px-6 py-8">
   <h1 class="headline mb-6 text-3xl">{{ _("search.heading") }}</h1>
-  <form class="mb-8 flex flex-wrap items-center gap-3" method="get" action="/{{ locale }}/search">
-    <input class="min-w-64 flex-1" name="q" value="{{ query }}" placeholder="{{ _('search.placeholder') }}">
-    <button type="submit">{{ _("search.submit") }}</button>
+  <form class="form-row form-wide mb-8" method="get" action="/{{ locale }}/search">
+    <input name="q" value="{{ query }}" placeholder="{{ _('search.placeholder') }}">
+    <button class="btn" type="submit">{{ _("search.submit") }}</button>
   </form>
   {% if hits %}
     <ul>

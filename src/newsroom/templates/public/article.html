@@ -58,10 +58,10 @@
       <p class="meta mt-2">{{ _("comments.empty") }}</p>
     {% endif %}
     {% if reader %}
-      <form class="mt-4 grid gap-3" method="post" action="/{{ locale }}/article/{{ article.slug }}/comments">
+      <form class="form mt-4" method="post" action="/{{ locale }}/article/{{ article.slug }}/comments">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <textarea name="body" maxlength="2000" required rows="4"></textarea>
-        <button type="submit">{{ _("comments.submit") }}</button>
+        <button class="btn" type="submit">{{ _("comments.submit") }}</button>
       </form>
     {% else %}
       <p class="mt-4"><a href="/{{ locale }}/login">{{ _("comments.sign_in") }}</a></p>
