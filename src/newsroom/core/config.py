@@ -1,5 +1,6 @@
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, PostgresDsn, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,6 +48,13 @@ class Settings(BaseSettings):
     session_touch_interval_seconds: int = 60
 
     worker_poll_seconds: int = 30
+    media_dir: Path = Path("data/media")
+    public_base_url: str = "http://localhost:8000"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str | None = None
 
     @property
     def is_production(self) -> bool:

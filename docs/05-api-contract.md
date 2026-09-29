@@ -55,6 +55,7 @@ the JSON API over HTTP.
 |---|---|---|---|
 | GET | `/locales` | Enabled locales | `LocaleOut[]` |
 | GET | `/sections` | Section tree for a locale | `SectionOut[]` |
+| GET | `/search` | Published stories (`q`, `section`, `tag`, `since`, `until`, `limit`, `cursor`) | `Page[SearchHit]`. Empty `q` with no filters returns an empty page. |
 | GET | `/articles` | Published articles (`section`, `tag`, `limit`, `cursor`) | `Page[ArticleSummaryOut]` |
 | GET | `/articles/{slug}` | Published article by slug in locale | `ArticleOut`; `301` if redirected slug; `410` if unpublished |
 | GET | `/tags/{slug}/articles` | Articles by tag | `Page[ArticleSummaryOut]` |
@@ -92,6 +93,20 @@ the JSON API over HTTP.
 | DELETE | `/users/{user_id}/roles/{user_role_id}` | `role.assign` | Revoke |
 | GET | `/roles` | `user.read` | Roles with permissions |
 | GET | `/audit-events` | `audit.read` | Filter by entity, actor, action, time |
+| POST | `/media` | `media.upload` | Upload a JPEG, PNG, GIF, or WebP (8MB) |
+| PUT | `/media/{id}/translations` | `media.upload` | Caption and alt text for one locale |
+| PUT | `/articles/{id}/lead` | edit or own | Set or clear the lead image (`media_id`) |
+| PUT | `/homepage` | `article.publish` | Replace a locale's homepage order (`localization_ids`, optional `labels`) |
+| POST | `/localizations/{id}/legal-hold` | `article.review` | Block schedule and publish. Reason required |
+| POST | `/localizations/{id}/legal-hold/clear` | `article.clear_legal` | Record counsel's clearance. Reason required |
+| POST | `/localizations/{id}/purge` | `article.purge` | Hard-remove one language edition. Reason required. The audit row keeps the identifiers |
+| POST | `/tags/merge` | `tag.manage` | Move stories from one tag onto another, then delete the source |
+| GET/POST | `/authors` | `article.create` or `article.edit` | Guest and agency bylines. Staff bylines come with the account |
+| DELETE | `/authors/{id}` | same | Delete an unused guest or agency byline |
+| GET/POST | `/locales` | `locale.manage` | Add a language. Enabling, hiding, and the default are `POST /locales/{code}/enabled` and `/default` |
+| POST | `/roles` | `role.manage` | Custom role below the actor's rank. System roles are not editable |
+| GET/PUT | `/settings` | `settings.manage` | Site name and whether readers can register |
+| DELETE | `/media/{id}` | `media.manage` | Delete a file that no story uses |
 
 Transition requests go through **one endpoint with an action field** instead of one endpoint per
 action. The state machine then stays in one place, and the audit log records the action name
@@ -111,5 +126,8 @@ exactly as requested.
 | `/admin/` | Dashboard |
 | `/admin/articles`, `/admin/articles/{id}`, `/admin/localizations/{id}/edit` | Editorial |
 | `/admin/sections`, `/admin/tags`, `/admin/users`, `/admin/audit` | Management |
+| `/admin/media`, `/admin/homepage` | Media library and homepage order |
+| `/admin/authors`, `/admin/locales`, `/admin/roles`, `/admin/settings` | Bylines, languages, custom roles, site settings |
+| `/media/{id}` | Uploaded image |
 
 HTMX requests (`HX-Request: true`) to the same URLs return only the relevant fragment.

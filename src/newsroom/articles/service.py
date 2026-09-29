@@ -1,14 +1,14 @@
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
-from newsroom.articles.body import render_body
+from newsroom.articles.body import InvalidBody, referenced_media, render_body
 from newsroom.articles.models import (
     Article,
     ArticleAuthor,
@@ -51,6 +51,7 @@ from newsroom.articles.workflow import (
     EDITABLE_BY_OWNER,
     ArticleAction,
     ArticleStatus,
+    ReasonRequired,
     available_actions,
     resolve_transition,
 )
@@ -60,9 +61,13 @@ from newsroom.auth.principal import Principal
 from newsroom.authz.permissions import Perm
 from newsroom.core.errors import Conflict, Gone, NotFound, PermissionDenied
 from newsroom.core.schemas import Page, PageParams
+from newsroom.media.models import MediaAsset
+from newsroom.search.service import SearchService
 from newsroom.taxonomy.models import Section, SectionTranslation, Tag, TagTranslation
 from newsroom.taxonomy.service import tag_public
 from newsroom.users.models import UserKind
+
+AUTOSAVE_WINDOW = timedelta(minutes=5)
 
 
 class RevisionConflict(Conflict):
@@ -176,8 +181,15 @@ class ArticleService:
     ) -> RevisionOut:
         localization = await self._localization(localization_id)
         self._require_edit(actor, localization.article, localization)
+        if payload.kind is RevisionKind.AUTOSAVE:
+            await self._require_media(payload.content.body)
+            coalesced = self._coalesce_autosave(localization, actor, payload)
+            if coalesced is not None:
+                await self._commit_article()
+                return self._revision_out(coalesced, localization)
         if localization.current_revision_id != payload.base_revision_id:
             raise RevisionConflict("Revision is stale")
+        await self._require_media(payload.content.body)
         revision = self._new_revision(
             localization,
             actor,
@@ -188,13 +200,7 @@ class ArticleService:
         )
         await self.db.flush()
         localization.current_revision_id = revision.id
-        if (
-            localization.status is ArticleStatus.PUBLISHED
-            and localization.article.created_by == actor.user.id
-            and not actor.grants.has(
-                Perm.ARTICLE_PUBLISH, section_id=localization.article.section_id
-            )
-        ):
+        if payload.kind is RevisionKind.MANUAL and self._writer_proposal(actor, localization):
             localization.update_requested_at = utcnow()
         localization.lock_version += 1
         await self._commit_article()
@@ -208,6 +214,100 @@ class ArticleService:
             localization_id,
             TransitionRequest(action=ArticleAction.DELETE, lock_version=localization.lock_version),
         )
+
+    async def set_legal_hold(
+        self, actor: Principal, localization_id: uuid.UUID, reason: str
+    ) -> None:
+        """Block schedule and publish until counsel is recorded. Not a workflow status."""
+        localization = await self._localization(localization_id)
+        self._require(actor, Perm.ARTICLE_REVIEW, localization.article.section_id)
+        self._require_reason(reason, "hold a story")
+        if localization.legal_hold:
+            raise Conflict("This story is already on legal hold")
+        if localization.status is ArticleStatus.ARCHIVED:
+            raise Conflict("An archived story cannot be put on legal hold")
+        localization.legal_hold = True
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="article.legal_hold",
+            entity_type="article_localization",
+            entity_id=localization.id,
+            before={"legal_hold": False},
+            after={"legal_hold": True},
+            reason=reason.strip(),
+        )
+        await self.db.commit()
+
+    async def clear_legal_hold(
+        self, actor: Principal, localization_id: uuid.UUID, reason: str
+    ) -> None:
+        """Record that counsel signed off. The editor is the user of the app, not counsel."""
+        localization = await self._localization(localization_id)
+        self._require(actor, Perm.ARTICLE_CLEAR_LEGAL, localization.article.section_id)
+        self._require_reason(reason, "clear a legal hold")
+        if not localization.legal_hold:
+            raise Conflict("This story is not on legal hold")
+        localization.legal_hold = False
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="article.clear_legal",
+            entity_type="article_localization",
+            entity_id=localization.id,
+            before={"legal_hold": True},
+            after={"legal_hold": False},
+            reason=reason.strip(),
+        )
+        await self.db.commit()
+
+    async def purge(self, actor: Principal, localization_id: uuid.UUID, reason: str) -> None:
+        """Hard-remove one language edition. The audit row keeps the identifiers."""
+        if not actor.grants.has_anywhere(Perm.ARTICLE_PURGE):
+            raise PermissionDenied("Missing permission: article.purge")
+        self._require_reason(reason, "purge a story")
+        localization = await self._localization(localization_id)
+        article = localization.article
+        current = self._revision(localization, localization.current_revision_id)
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="article.purge",
+            entity_type="article_localization",
+            entity_id=localization.id,
+            before={
+                "article_id": str(article.id),
+                "locale": localization.locale,
+                "slug": localization.slug,
+                "title": current.title if current else "",
+                "status": localization.status.value,
+            },
+            reason=reason.strip(),
+        )
+        await self.db.flush()
+        article_id = article.id
+        localization.current_revision_id = None
+        localization.published_revision_id = None
+        await self.db.flush()
+        for revision in list(localization.revisions):
+            revision.parent_revision_id = None
+            revision.restored_from_id = None
+        await self.db.flush()
+        for revision in list(localization.revisions):
+            await self.db.delete(revision)
+        localization.revisions.clear()
+        if localization in article.localizations:
+            article.localizations.remove(localization)
+        await self.db.delete(localization)
+        await self.db.flush()
+        left = await self.db.scalar(
+            select(func.count())
+            .select_from(ArticleLocalization)
+            .where(ArticleLocalization.article_id == article_id)
+        )
+        if not left:
+            await self.db.delete(article)
+        await self._commit_article()
 
     async def list_revisions(
         self, actor: Principal, localization_id: uuid.UUID, paging: PageParams
@@ -281,6 +381,7 @@ class ArticleService:
             seo_title=source.seo_title,
             seo_description=source.seo_description,
         )
+        await self._require_media(content.body)
         revision = self._new_revision(
             localization,
             actor,
@@ -347,6 +448,13 @@ class ArticleService:
             },
             reason=payload.reason,
         )
+        if payload.action in {
+            ArticleAction.PUBLISH,
+            ArticleAction.REPUBLISH,
+            ArticleAction.PUBLISH_UPDATE,
+            ArticleAction.UNPUBLISH,
+        }:
+            await self._sync_search(localization.id)
         await self._commit_article()
         return self._localization_out(localization)
 
@@ -416,6 +524,8 @@ class ArticleService:
             before={"slug": old_slug},
             after={"slug": new_slug},
         )
+        if localization.status is ArticleStatus.PUBLISHED:
+            await self._sync_search(localization.id)
         await self._commit_article()
         return self._localization_out(localization)
 
@@ -563,6 +673,7 @@ class ArticleService:
                 entity_id=localization.id,
                 after={"status": localization.status.value, "via": "scheduler"},
             )
+            await self._sync_search(localization.id)
             await self.db.commit()
             count += 1
         return count
@@ -596,9 +707,42 @@ class ArticleService:
                 after={"status": "unpublished", "via": "scheduler"},
                 reason="Embargo expired",
             )
+            await self._sync_search(localization.id)
             await self.db.commit()
             count += 1
         return count
+
+    async def set_lead(
+        self, actor: Principal, article_id: uuid.UUID, media_id: uuid.UUID | None
+    ) -> None:
+        article = await self._article(article_id)
+        self._require_edit(actor, article, None)
+        if media_id is not None and await self.db.get(MediaAsset, media_id) is None:
+            raise NotFound("Media not found")
+        article.lead_media_id = media_id
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="article.lead_set",
+            entity_type="article",
+            entity_id=article.id,
+            after={"lead_media_id": str(media_id) if media_id else None},
+        )
+        await self._commit_article()
+
+    async def _require_media(self, document: dict) -> None:
+        needed = referenced_media(document)
+        if not needed:
+            return
+        found = set(
+            (await self.db.scalars(select(MediaAsset.id).where(MediaAsset.id.in_(needed)))).all()
+        )
+        if found != needed:
+            raise InvalidBody("An image points at a media file that does not exist")
+
+    async def _sync_search(self, localization_id: uuid.UUID) -> None:
+        await self._flush_article()
+        await SearchService(self.db).sync(localization_id)
 
     async def bookmark(self, user_id: uuid.UUID, article_id: uuid.UUID) -> None:
         article = await self.db.get(Article, article_id)
@@ -682,7 +826,7 @@ class ArticleService:
             )
             for event in events
         )
-        return sorted(entries, key=lambda item: item.occurred_at)
+        return sorted(entries, key=lambda item: item.occurred_at, reverse=True)
 
     def _apply_transition(self, localization: ArticleLocalization, payload) -> None:
         now = utcnow()
@@ -730,6 +874,7 @@ class ArticleService:
         await self.db.flush()
         set_committed_value(localization, "revisions", [])
         set_committed_value(localization, "corrections", [])
+        await self._require_media(content.body)
         revision = self._new_revision(
             localization, actor, content, RevisionKind.MANUAL, None, parent_id=None
         )
@@ -760,14 +905,25 @@ class ArticleService:
         self.db.add(revision)
         return revision
 
+    async def _flush_article(self) -> None:
+        try:
+            await self.db.flush()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            self._reraise_unique(exc)
+
     async def _commit_article(self) -> None:
         try:
             await self.db.commit()
         except IntegrityError as exc:
             await self.db.rollback()
-            if "unique" not in str(exc.orig).lower() and "duplicate" not in str(exc.orig).lower():
-                raise
-            raise Conflict("Slug or author is already in use") from exc
+            self._reraise_unique(exc)
+
+    @staticmethod
+    def _reraise_unique(exc: IntegrityError) -> None:
+        if "unique" not in str(exc.orig).lower() and "duplicate" not in str(exc.orig).lower():
+            raise exc
+        raise Conflict("Slug or author is already in use") from exc
 
     async def _article(self, article_id: uuid.UUID) -> Article:
         article = await self.db.scalar(
@@ -832,6 +988,7 @@ class ArticleService:
             != localization.published_revision_id
             and localization.published_revision_id is not None,
             update_requested_at=localization.update_requested_at,
+            legal_hold=localization.legal_hold,
             lock_version=localization.lock_version,
         )
 
@@ -971,6 +1128,9 @@ class ArticleService:
                 slug=section_tr.slug if section_tr else article.section.key,
             ),
             bylines=bylines,
+            lead_image_url=(
+                f"/media/{article.lead_media_id}" if article.lead_media_id is not None else None
+            ),
             published_at=localization.published_at,
             first_published_at=localization.first_published_at,
             subtitle=revision.subtitle,
@@ -1010,15 +1170,73 @@ class ArticleService:
             return
         raise PermissionDenied("You cannot edit this article")
 
+    def _coalesce_autosave(
+        self, localization: ArticleLocalization, actor: Principal, payload: RevisionCreate
+    ) -> ArticleRevision | None:
+        """Replace the open autosave. Five quiet minutes, or a manual save, starts a new row."""
+        current = self._revision(localization, localization.current_revision_id)
+        if current is None or not self._autosave_open(current, actor, localization):
+            return None
+        allowed = {current.id}
+        if current.parent_revision_id is not None:
+            allowed.add(current.parent_revision_id)
+        if payload.base_revision_id not in allowed:
+            raise RevisionConflict("Revision is stale")
+        content = payload.content
+        current.title = content.title
+        current.subtitle = content.subtitle
+        current.excerpt = content.excerpt
+        current.body = content.body
+        current.body_html = render_body(content.body)
+        current.seo_title = content.seo_title
+        current.seo_description = content.seo_description
+        current.change_note = payload.change_note
+        return current
+
+    def _autosave_open(
+        self,
+        current: ArticleRevision | None,
+        actor: Principal,
+        localization: ArticleLocalization,
+    ) -> bool:
+        if current is None or current.kind is not RevisionKind.AUTOSAVE:
+            return False
+        if current.created_by != actor.user.id:
+            return False
+        if current.id == localization.published_revision_id:
+            return False
+        created = current.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        if utcnow() - created > AUTOSAVE_WINDOW:
+            return False
+        return not any(
+            item.id != current.id
+            and (item.parent_revision_id == current.id or item.restored_from_id == current.id)
+            for item in localization.revisions
+        )
+
+    def _writer_proposal(self, actor: Principal, localization: ArticleLocalization) -> bool:
+        return (
+            localization.status is ArticleStatus.PUBLISHED
+            and localization.article.created_by == actor.user.id
+            and not actor.grants.has(
+                Perm.ARTICLE_PUBLISH, section_id=localization.article.section_id
+            )
+        )
+
+    @staticmethod
+    def _require_reason(reason: str, action: str) -> None:
+        if not reason or not reason.strip():
+            raise ReasonRequired(f"A reason is required to {action}")
+
     def _require_transition(self, actor: Principal, article: Article, edge) -> None:
+        """Submit and delete-draft are the writer's own story, unless they can edit the desk."""
         owns = article.created_by == actor.user.id
-        if (
-            edge.owner_may_act
-            and owns
-            and not actor.grants.has(Perm.ARTICLE_EDIT, section_id=article.section_id)
-        ):
-            if not actor.grants.has_anywhere(edge.permission):
-                raise PermissionDenied(f"Missing permission: {edge.permission.value}")
+        can_edit = actor.grants.has(Perm.ARTICLE_EDIT, section_id=article.section_id)
+        if edge.owner_may_act and not can_edit:
+            if not owns or not actor.grants.has_anywhere(edge.permission):
+                raise PermissionDenied("You can only submit or delete your own draft")
             return
         self._require(actor, edge.permission, article.section_id)
 

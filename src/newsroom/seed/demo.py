@@ -15,10 +15,11 @@ from newsroom.articles.schemas import (
     TransitionRequest,
 )
 from newsroom.articles.service import ArticleService
-from newsroom.articles.workflow import ArticleAction
+from newsroom.articles.workflow import ArticleAction, ArticleStatus
 from newsroom.auth.principal import Principal
 from newsroom.authz.authorizer import DbAuthorizer
 from newsroom.core.schemas import PageParams
+from newsroom.search.service import SearchService
 from newsroom.taxonomy.models import Section, Tag
 from newsroom.taxonomy.schemas import (
     SectionCreate,
@@ -87,6 +88,7 @@ async def seed_demo(db: AsyncSession) -> list[str]:
     if await db.scalar(
         select(ArticleLocalization).where(ArticleLocalization.slug == "cabinet-budget")
     ):
+        await _index_published(db)
         return notes
 
     writer = await _principal(db, "demo-writer@example.com")
@@ -203,6 +205,22 @@ async def seed_demo(db: AsyncSession) -> list[str]:
     )
     notes.append("scheduled embargo-briefing for six hours from now")
     return notes
+
+
+async def _index_published(db: AsyncSession) -> None:
+    ids = list(
+        (
+            await db.scalars(
+                select(ArticleLocalization.id).where(
+                    ArticleLocalization.status == ArticleStatus.PUBLISHED
+                )
+            )
+        ).all()
+    )
+    search = SearchService(db)
+    for localization_id in ids:
+        await search.sync(localization_id)
+    await db.commit()
 
 
 async def _section(db: AsyncSession, key: str, *translations: tuple[str, str, str]) -> uuid.UUID:

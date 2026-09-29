@@ -4,6 +4,8 @@ Unknown nodes are rejected. `nh3` runs on the result so a bug in the renderer ca
 emit a tag the public site does not allow.
 """
 
+import re
+import uuid
 from html import escape
 from typing import Any
 from urllib.parse import urlparse
@@ -50,6 +52,50 @@ _MARKS = {
 class InvalidBody(AppError):
     status_code = 422
     code = "invalid_body"
+
+
+def referenced_media(document: object) -> set[uuid.UUID]:
+    found: set[uuid.UUID] = set()
+    _collect_media(document, found)
+    return found
+
+
+def _collect_media(node: object, found: set[uuid.UUID]) -> None:
+    if not isinstance(node, dict):
+        return
+    attrs = node.get("attrs")
+    if isinstance(attrs, dict):
+        src = attrs.get("src")
+        if isinstance(src, str) and _MEDIA_SRC.match(src):
+            found.add(uuid.UUID(src.removeprefix("/media/")))
+    content = node.get("content")
+    if isinstance(content, list):
+        for child in content:
+            _collect_media(child, found)
+
+
+def plain_text(document: object) -> str:
+    """Visible text of a document, for the search index. Markup is not included."""
+    parts: list[str] = []
+    _collect_text(document, parts)
+    return " ".join(parts)
+
+
+def _collect_text(node: object, parts: list[str]) -> None:
+    if not isinstance(node, dict):
+        return
+    text = node.get("text")
+    if isinstance(text, str) and text.strip():
+        parts.append(text.strip())
+    attrs = node.get("attrs")
+    if isinstance(attrs, dict):
+        alt = attrs.get("alt")
+        if isinstance(alt, str) and alt.strip():
+            parts.append(alt.strip())
+    content = node.get("content")
+    if isinstance(content, list):
+        for child in content:
+            _collect_text(child, parts)
 
 
 def render_body(document: object) -> str:
@@ -154,13 +200,19 @@ def _inlines(node: dict[str, Any]) -> str:
     return "".join(_inline(child) for child in _children(node))
 
 
+_MEDIA_SRC = re.compile(
+    r"^/media/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
 def _image(attrs: dict[str, Any]) -> str:
     src = attrs.get("src")
     alt = attrs.get("alt")
     if not isinstance(alt, str) or not alt.strip():
         raise InvalidBody("Images need alt text")
-    if not isinstance(src, str) or not _is_allowed_url(src, relative_prefix="/media/"):
-        raise InvalidBody("Image source must be a media path or an https URL")
+    if not isinstance(src, str) or _MEDIA_SRC.match(src) is None:
+        raise InvalidBody("Image source must be a media asset URL")
     return f'<img src="{escape(src, quote=True)}" alt="{escape(alt, quote=True)}">'
 
 

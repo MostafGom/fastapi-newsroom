@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -7,10 +8,12 @@ from newsroom.articles.schemas import ArticleOut, ArticleSummaryOut
 from newsroom.articles.service import ArticleService
 from newsroom.core.db import DbSession
 from newsroom.core.errors import NotFound
-from newsroom.core.i18n import resolve_api_locale
+from newsroom.core.locale_dep import resolve_api_locale
 from newsroom.core.schemas import PROBLEM_RESPONSES, Page, PageParams, Slug, page_params
 from newsroom.locales.repository import LocaleRepository
 from newsroom.locales.schemas import LocaleOut
+from newsroom.search.schemas import SearchFilters, SearchHit
+from newsroom.search.service import SearchService
 from newsroom.taxonomy.schemas import SectionOut
 from newsroom.taxonomy.service import TaxonomyService
 
@@ -29,6 +32,30 @@ async def list_locales(db: DbSession) -> list[LocaleOut]:
 @router.get("/sections", response_model=list[SectionOut])
 async def list_sections(locale: Locale, db: DbSession) -> list[SectionOut]:
     return await TaxonomyService(db).public_sections(locale)
+
+
+@router.get("/search", response_model=Page[SearchHit])
+async def search_articles(
+    locale: Locale,
+    paging: Paging,
+    db: DbSession,
+    q: Annotated[str, Query(max_length=200)] = "",
+    section: Annotated[str | None, Query(max_length=160)] = None,
+    tag: Annotated[str | None, Query(max_length=160)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> Page[SearchHit]:
+    return await SearchService(db).search(
+        SearchFilters(
+            locale=locale,
+            text=q,
+            section_slug=section,
+            tag_slug=tag,
+            since=since,
+            until=until,
+        ),
+        paging,
+    )
 
 
 @router.get("/articles", response_model=Page[ArticleSummaryOut])

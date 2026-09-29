@@ -7,6 +7,48 @@ import { Editor } from "@tiptap/core";
 
 const EMPTY = { type: "doc", content: [{ type: "paragraph" }] };
 
+const autosaveTimers = new WeakMap();
+
+function scheduleAutosave(host, editor) {
+  const url = host.dataset.autosave;
+  if (!url) return;
+  const previous = autosaveTimers.get(host);
+  if (previous) clearTimeout(previous);
+  autosaveTimers.set(
+    host,
+    setTimeout(() => {
+      autosave(host, editor);
+    }, 2000),
+  );
+}
+
+async function autosave(host, editor) {
+  const form = host.closest("form");
+  const title = form?.querySelector('[name="title"]')?.value?.trim();
+  const base = form?.querySelector('[name="base_revision_id"]')?.value;
+  if (!form || !title || !base) return;
+  const token = document.querySelector('meta[name="csrf-token"]')?.content;
+  const subtitle = form.querySelector('[name="subtitle"]')?.value?.trim() || null;
+  const excerpt = form.querySelector('[name="excerpt"]')?.value?.trim() || null;
+  const response = await fetch(host.dataset.autosave, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": token || "",
+    },
+    body: JSON.stringify({
+      base_revision_id: base,
+      kind: "autosave",
+      content: { title, subtitle, excerpt, body: editor.getJSON() },
+    }),
+  });
+  if (!response.ok) return;
+  const saved = await response.json();
+  const input = form.querySelector('[name="base_revision_id"]');
+  if (input && saved.id) input.value = saved.id;
+}
+
 function run(editor, command) {
   const chain = editor.chain().focus();
   const commands = {
@@ -26,6 +68,13 @@ function run(editor, command) {
       if (href === null) return;
       if (href === "") chain.unsetLink().run();
       else chain.setLink({ href }).run();
+    },
+    image: () => {
+      const src = window.prompt("Media URL", "/media/");
+      if (!src) return;
+      const alt = window.prompt("Alt text", "");
+      if (!alt || !alt.trim()) return;
+      chain.setImage({ src: src.trim(), alt: alt.trim() }).run();
     },
   };
   commands[command]?.();
@@ -66,6 +115,7 @@ export function mountEditors(root = document) {
       },
       onUpdate: ({ editor: current }) => {
         input.value = JSON.stringify(current.getJSON());
+        scheduleAutosave(host, current);
       },
     });
     input.value = JSON.stringify(editor.getJSON());

@@ -9,6 +9,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from starlette.datastructures import FormData
 
+from newsroom.articles.authors import AuthorCreate, AuthorService, AuthorTranslationIn
+from newsroom.articles.models import AuthorKind
 from newsroom.audit.service import AuditService
 from newsroom.auth.dependencies import csrf_protect_web
 from newsroom.auth.principal import Principal
@@ -17,7 +19,10 @@ from newsroom.authz.permissions import Perm
 from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
+from newsroom.core.i18n import TextDirection
 from newsroom.core.schemas import PageParams
+from newsroom.locales.service import LocaleCreate, LocaleService
+from newsroom.settings.service import SettingsService, SiteSettingsUpdate
 from newsroom.taxonomy.schemas import (
     SectionAdminOut,
     SectionCreate,
@@ -28,7 +33,7 @@ from newsroom.taxonomy.schemas import (
 )
 from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.models import UserKind, UserStatus
-from newsroom.users.schemas import RoleGrantCreate, StaffCreate, UserUpdate
+from newsroom.users.schemas import RoleCreate, RoleGrantCreate, StaffCreate, UserUpdate
 from newsroom.users.service import UserService
 from newsroom.web.templating import templates
 
@@ -393,3 +398,218 @@ async def audit_page(
             "next_url": nxt,
         },
     )
+
+
+@router.post("/tags/merge")
+async def merge_tags(request: Request, staff: CurrentStaff, db: DbSession) -> Response:
+    _require(staff, Perm.TAG_MANAGE)
+    form = await request.form()
+    try:
+        await TaxonomyService(db).merge_tags(
+            staff, uuid.UUID(_text(form, "source_id")), uuid.UUID(_text(form, "target_id"))
+        )
+    except (AppError, ValidationError, ValueError) as exc:
+        return _back("/admin/tags", exc)
+    return RedirectResponse("/admin/tags?notice=saved", status_code=303)
+
+
+@router.get("/authors", response_class=HTMLResponse)
+async def authors_page(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    notice: str | None = None,
+    detail: str | None = None,
+) -> HTMLResponse:
+    _require(staff, Perm.ARTICLE_CREATE)
+    authors = await AuthorService(db).list_bylines()
+    return templates.TemplateResponse(
+        request,
+        "admin/authors.html",
+        {
+            "staff": staff,
+            "authors": authors,
+            "kinds": [AuthorKind.CONTRIBUTOR, AuthorKind.AGENCY],
+            "notice": notice,
+            "detail": detail,
+        },
+    )
+
+
+@router.post("/authors")
+async def create_author(request: Request, staff: CurrentStaff, db: DbSession) -> Response:
+    _require(staff, Perm.ARTICLE_CREATE)
+    form = await request.form()
+    translations = []
+    for code in request.state.enabled_locales:
+        name = _text(form, f"name_{code}")
+        slug = _text(form, f"slug_{code}")
+        if name and slug:
+            translations.append(
+                AuthorTranslationIn(locale=code, display_name=name, slug=slug, bio=None)
+            )
+    try:
+        await AuthorService(db).create(
+            staff,
+            AuthorCreate(
+                kind=AuthorKind(_text(form, "kind")),
+                key=_text(form, "key"),
+                translations=translations,
+            ),
+        )
+    except (AppError, ValidationError, ValueError) as exc:
+        return _back("/admin/authors", exc)
+    return RedirectResponse("/admin/authors?notice=created", status_code=303)
+
+
+@router.post("/authors/{author_id}/delete")
+async def delete_author(author_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
+    try:
+        await AuthorService(db).delete(staff, author_id)
+    except (AppError, ValueError) as exc:
+        return _back("/admin/authors", exc)
+    return RedirectResponse("/admin/authors?notice=saved", status_code=303)
+
+
+@router.get("/locales", response_class=HTMLResponse)
+async def locales_page(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    notice: str | None = None,
+    detail: str | None = None,
+) -> HTMLResponse:
+    _require(staff, Perm.LOCALE_MANAGE)
+    rows = await LocaleService(db).list_all()
+    return templates.TemplateResponse(
+        request,
+        "admin/locales.html",
+        {
+            "staff": staff,
+            "rows": rows,
+            "directions": list(TextDirection),
+            "notice": notice,
+            "detail": detail,
+        },
+    )
+
+
+@router.post("/locales")
+async def create_locale(request: Request, staff: CurrentStaff, db: DbSession) -> Response:
+    _require(staff, Perm.LOCALE_MANAGE)
+    form = await request.form()
+    try:
+        await LocaleService(db).create(
+            staff,
+            LocaleCreate(
+                code=_text(form, "code"),
+                name=_text(form, "name"),
+                native_name=_text(form, "native_name"),
+                direction=TextDirection(_text(form, "direction")),
+                sort_order=int(_text(form, "sort_order") or "0"),
+            ),
+        )
+    except (AppError, ValidationError, ValueError) as exc:
+        return _back("/admin/locales", exc)
+    return RedirectResponse("/admin/locales?notice=created", status_code=303)
+
+
+@router.post("/locales/{code}/default")
+async def make_default_locale(code: str, staff: CurrentStaff, db: DbSession) -> Response:
+    _require(staff, Perm.LOCALE_MANAGE)
+    try:
+        await LocaleService(db).set_default(staff, code)
+    except (AppError, ValueError) as exc:
+        return _back("/admin/locales", exc)
+    return RedirectResponse("/admin/locales?notice=saved", status_code=303)
+
+
+@router.post("/locales/{code}/enabled")
+async def toggle_locale(
+    code: str, request: Request, staff: CurrentStaff, db: DbSession
+) -> Response:
+    _require(staff, Perm.LOCALE_MANAGE)
+    form = await request.form()
+    try:
+        await LocaleService(db).set_enabled(staff, code, _text(form, "enabled") == "1")
+    except (AppError, ValueError) as exc:
+        return _back("/admin/locales", exc)
+    return RedirectResponse("/admin/locales?notice=saved", status_code=303)
+
+
+@router.get("/roles", response_class=HTMLResponse)
+async def roles_page(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    notice: str | None = None,
+    detail: str | None = None,
+) -> HTMLResponse:
+    _require(staff, Perm.ROLE_MANAGE)
+    roles = await UserService(db).list_roles()
+    return templates.TemplateResponse(
+        request,
+        "admin/roles.html",
+        {
+            "staff": staff,
+            "roles": roles,
+            "permissions": [item.value for item in Perm],
+            "notice": notice,
+            "detail": detail,
+        },
+    )
+
+
+@router.post("/roles")
+async def create_role(request: Request, staff: CurrentStaff, db: DbSession) -> Response:
+    _require(staff, Perm.ROLE_MANAGE)
+    form = await request.form()
+    selected = form.getlist("permissions")
+    try:
+        await UserService(db).create_role(
+            staff,
+            RoleCreate(
+                key=_text(form, "key"),
+                name=_text(form, "name"),
+                description=_text(form, "description") or None,
+                rank=int(_text(form, "rank") or "10"),
+                permissions=[item for item in selected if isinstance(item, str)],
+            ),
+        )
+    except (AppError, ValidationError, ValueError) as exc:
+        return _back("/admin/roles", exc)
+    return RedirectResponse("/admin/roles?notice=created", status_code=303)
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    notice: str | None = None,
+    detail: str | None = None,
+) -> HTMLResponse:
+    _require(staff, Perm.SETTINGS_MANAGE)
+    current = await SettingsService(db).get()
+    return templates.TemplateResponse(
+        request,
+        "admin/settings.html",
+        {"staff": staff, "current": current, "notice": notice, "detail": detail},
+    )
+
+
+@router.post("/settings")
+async def save_settings(request: Request, staff: CurrentStaff, db: DbSession) -> Response:
+    _require(staff, Perm.SETTINGS_MANAGE)
+    form = await request.form()
+    try:
+        await SettingsService(db).update(
+            staff,
+            SiteSettingsUpdate(
+                site_name=_text(form, "site_name"),
+                registration_enabled=_text(form, "registration_enabled") == "1",
+            ),
+        )
+    except (AppError, ValidationError, ValueError) as exc:
+        return _back("/admin/settings", exc)
+    return RedirectResponse("/admin/settings?notice=saved", status_code=303)

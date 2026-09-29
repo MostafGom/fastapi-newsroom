@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 
+from newsroom.articles.authors import AuthorService
 from newsroom.articles.body import InvalidBody
 from newsroom.articles.schemas import (
     ArticleCreate,
@@ -34,9 +35,11 @@ from newsroom.articles.workflow import (
 from newsroom.auth.dependencies import csrf_protect_web
 from newsroom.authz.dependencies import CurrentStaff
 from newsroom.authz.permissions import Perm
+from newsroom.comments.service import CommentService
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
+from newsroom.media.service import MediaService
 from newsroom.taxonomy.schemas import SectionAdminOut, TagAdminOut
 from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.service import UserService
@@ -121,16 +124,13 @@ def _can_change_slug(staff: CurrentStaff, article, story) -> bool:
 
 
 def _visible_actions(staff: CurrentStaff, section_id: uuid.UUID, created_by: uuid.UUID, actions):
+    """Same ownership rule as ArticleService: a writer acts only on their own draft."""
     visible = []
+    can_edit = staff.grants.has(Perm.ARTICLE_EDIT, section_id=section_id)
     for action in actions:
         edge = TRANSITIONS[action]
-        owns = created_by == staff.user.id
-        if (
-            edge.owner_may_act
-            and owns
-            and not staff.grants.has(Perm.ARTICLE_EDIT, section_id=section_id)
-        ):
-            if staff.grants.has_anywhere(edge.permission):
+        if edge.owner_may_act and not can_edit:
+            if created_by == staff.user.id and staff.grants.has_anywhere(edge.permission):
                 visible.append(action)
             continue
         if staff.grants.has(edge.permission, section_id=section_id):
@@ -153,8 +153,9 @@ async def new_story(
 ) -> HTMLResponse:
     if not staff.grants.has_anywhere(Perm.ARTICLE_CREATE):
         raise PermissionDenied("You cannot create stories")
-    chosen = locale if locale in {"ar", "en"} else "ar"
+    chosen = locale if locale in getattr(request.state, "enabled_locales", {"ar", "en"}) else "ar"
     sections, tags = await _desk_choices(db, chosen)
+    authors = await AuthorService(db).list_bylines()
     return templates.TemplateResponse(
         request,
         "admin/story_new.html",
@@ -162,6 +163,7 @@ async def new_story(
             "staff": staff,
             "sections": sections,
             "tags": tags,
+            "authors": authors,
             "chosen_locale": chosen,
             "editor_dir": _direction(chosen),
             "article_types": list(ArticleType),
@@ -187,6 +189,7 @@ async def create_story(
     article_type: Annotated[str, Form()] = ArticleType.NEWS.value,
     is_breaking: Annotated[str | None, Form()] = None,
     tag_ids: Annotated[list[str] | None, Form()] = None,
+    author_ids: Annotated[list[str] | None, Form()] = None,
 ) -> Response:
     form = {
         "section_id": str(section_id),
@@ -198,15 +201,19 @@ async def create_story(
         "article_type": article_type,
         "is_breaking": is_breaking == "1",
         "tag_ids": tag_ids or [],
+        "author_ids": author_ids or [],
     }
     try:
-        author = await UserService(db).ensure_author(staff.user)
+        chosen_authors = _ids(author_ids or [])
+        if not chosen_authors:
+            author = await UserService(db).ensure_author(staff.user)
+            chosen_authors = [author.id]
         created = await ArticleService(db).create(
             staff,
             ArticleCreate(
                 section_id=section_id,
                 article_type=ArticleType(article_type),
-                author_ids=[author.id],
+                author_ids=chosen_authors,
                 tag_ids=_ids(tag_ids or []),
                 is_breaking=is_breaking == "1",
                 locale=locale,
@@ -225,6 +232,7 @@ async def create_story(
                 "staff": staff,
                 "sections": sections,
                 "tags": tags,
+                "authors": await AuthorService(db).list_bylines(),
                 "chosen_locale": locale,
                 "editor_dir": _direction(locale),
                 "article_types": list(ArticleType),
@@ -236,6 +244,88 @@ async def create_story(
         )
     localization_id = created.localizations[0].id
     return RedirectResponse(f"/admin/stories/{localization_id}?notice=created", status_code=303)
+
+
+@router.post("/stories/{localization_id}/lead")
+async def set_lead(
+    localization_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    media_id: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    story = await ArticleService(db).get_localization(staff, localization_id)
+    chosen = uuid.UUID(media_id) if media_id else None
+    try:
+        await ArticleService(db).set_lead(staff, story.article_id, chosen)
+    except (AppError, ValueError) as exc:
+        detail = exc.detail if isinstance(exc, AppError) else "Choose an uploaded image"
+        return RedirectResponse(
+            f"/admin/stories/{localization_id}?notice=error&detail={quote(detail or '')}",
+            status_code=303,
+        )
+    return RedirectResponse(f"/admin/stories/{localization_id}?notice=saved", status_code=303)
+
+
+@router.post("/stories/{localization_id}/legal-hold")
+async def hold_story(
+    localization_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    reason: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    try:
+        await ArticleService(db).set_legal_hold(staff, localization_id, reason)
+    except (AppError, ValueError) as exc:
+        detail = exc.detail if isinstance(exc, AppError) else "A reason is required"
+        return RedirectResponse(
+            f"/admin/stories/{localization_id}?notice=error&detail={quote(detail or '')}",
+            status_code=303,
+        )
+    return RedirectResponse(f"/admin/stories/{localization_id}?notice=held", status_code=303)
+
+
+@router.post("/stories/{localization_id}/legal-hold/clear")
+async def clear_hold(
+    localization_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    reason: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    try:
+        await ArticleService(db).clear_legal_hold(staff, localization_id, reason)
+    except (AppError, ValueError) as exc:
+        detail = exc.detail if isinstance(exc, AppError) else "A reason is required"
+        return RedirectResponse(
+            f"/admin/stories/{localization_id}?notice=error&detail={quote(detail or '')}",
+            status_code=303,
+        )
+    return RedirectResponse(f"/admin/stories/{localization_id}?notice=cleared", status_code=303)
+
+
+@router.post("/stories/{localization_id}/purge")
+async def purge_story(
+    localization_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    reason: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    try:
+        await ArticleService(db).purge(staff, localization_id, reason)
+    except (AppError, ValueError) as exc:
+        detail = exc.detail if isinstance(exc, AppError) else "A reason is required"
+        return RedirectResponse(
+            f"/admin/stories/{localization_id}?notice=error&detail={quote(detail or '')}",
+            status_code=303,
+        )
+    return RedirectResponse("/admin/?notice=purged", status_code=303)
+
+
+@router.post("/stories/{localization_id}/comments/{comment_id}/hide")
+async def hide_story_comment(
+    localization_id: uuid.UUID, comment_id: uuid.UUID, staff: CurrentStaff, db: DbSession
+) -> RedirectResponse:
+    await CommentService(db).hide_by_staff(staff, comment_id)
+    return RedirectResponse(f"/admin/stories/{localization_id}?notice=saved", status_code=303)
 
 
 @router.get("/stories/{localization_id}", response_class=HTMLResponse)
@@ -459,6 +549,13 @@ async def _edit_context(
         "error": error or detail,
         "revisions": revisions.items,
         "diff": diff,
+        "timeline": await articles.history(staff, localization_id),
+        "can_hold": staff.grants.has(Perm.ARTICLE_REVIEW, section_id=article.section_id)
+        and not story.legal_hold
+        and story.status is not ArticleStatus.ARCHIVED,
+        "can_clear_hold": story.legal_hold
+        and staff.grants.has(Perm.ARTICLE_CLEAR_LEGAL, section_id=article.section_id),
+        "can_purge": staff.grants.has_anywhere(Perm.ARTICLE_PURGE),
         "can_restore": staff.grants.has(
             Perm.ARTICLE_RESTORE_REVISION, section_id=article.section_id
         ),
@@ -467,6 +564,9 @@ async def _edit_context(
         and story.status is not ArticleStatus.ARCHIVED
         and staff.grants.has(Perm.ARTICLE_CORRECT, section_id=article.section_id),
         "correction_kinds": list(CorrectionKind),
+        "media": await MediaService(db).list_recent(),
+        "comments": await CommentService(db).list_public(localization_id, None),
+        "can_hide_comments": staff.grants.has(Perm.ARTICLE_EDIT, section_id=article.section_id),
     }
 
 

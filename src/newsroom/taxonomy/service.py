@@ -4,8 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from newsroom.articles.models import ArticleLocalization, ArticleTag
+from newsroom.articles.workflow import ArticleStatus
+from newsroom.audit.service import record_event
+from newsroom.auth.principal import Principal
 from newsroom.core.errors import Conflict, NotFound
 from newsroom.core.schemas import Page, PageParams
+from newsroom.search.service import SearchService
 from newsroom.taxonomy.models import Section, SectionTranslation, Tag, TagTranslation
 from newsroom.taxonomy.schemas import (
     SectionAdminOut,
@@ -99,6 +104,56 @@ class TaxonomyService:
             await self.db.rollback()
             raise Conflict("Tag key or slug already exists") from exc
         return _tag_admin(tag)
+
+    async def merge_tags(
+        self, actor: Principal, source_id: uuid.UUID, target_id: uuid.UUID
+    ) -> TagAdminOut:
+        """Move every story from the source tag onto the target, then remove the source."""
+        if source_id == target_id:
+            raise Conflict("Choose two different tags")
+        source = await self.db.get(Tag, source_id)
+        target = await self.db.get(Tag, target_id)
+        if source is None or target is None:
+            raise NotFound("Tag not found")
+        links = list(
+            (await self.db.scalars(select(ArticleTag).where(ArticleTag.tag_id == source.id))).all()
+        )
+        article_ids = [link.article_id for link in links]
+        for link in links:
+            await self.db.delete(link)
+        await self.db.flush()
+        for article_id in article_ids:
+            existing = await self.db.get(ArticleTag, (article_id, target.id))
+            if existing is None:
+                self.db.add(ArticleTag(article_id=article_id, tag_id=target.id))
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="tag.merged",
+            entity_type="tag",
+            entity_id=target.id,
+            before={"key": source.key, "id": str(source.id)},
+            after={"key": target.key},
+        )
+        await self.db.delete(source)
+        if article_ids:
+            published = (
+                await self.db.scalars(
+                    select(ArticleLocalization.id).where(
+                        ArticleLocalization.article_id.in_(article_ids),
+                        ArticleLocalization.status == ArticleStatus.PUBLISHED,
+                    )
+                )
+            ).all()
+            search = SearchService(self.db)
+            for localization_id in published:
+                await search.sync(localization_id)
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise Conflict("Tag could not be merged") from exc
+        return _tag_admin(target)
 
     async def list_tags(self, paging: PageParams, q: str | None) -> Page[TagAdminOut]:
         stmt = select(Tag).order_by(Tag.key)

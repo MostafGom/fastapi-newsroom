@@ -56,6 +56,21 @@ class ReaderProfileOut(Schema):
     newsletter_opt_in: bool
 
 
+class RoleCreate(Schema):
+    key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,62}$", max_length=64)
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    rank: int = Field(ge=1, le=99)
+    permissions: list[str] = Field(min_length=1)
+
+
+class RoleUpdate(Schema):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    rank: int | None = Field(default=None, ge=1, le=99)
+    permissions: list[str] | None = Field(default=None, min_length=1)
+
+
 class RoleOut(Schema):
     id: uuid.UUID
     key: str

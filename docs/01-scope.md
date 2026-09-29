@@ -80,5 +80,6 @@ editorial dashboard for staff, served by one FastAPI application that exposes bo
 - Search, when Phase 3 starts, is a dedicated service. See
   [ADR 0009](adr/0009-search-service.md). PostgreSQL full-text is the first engine.
 
-## Still open
-- Which reader features ship in v1: bookmarks, newsletter, comments.
+## Reader features in v1
+Bookmarks, the daily briefing, and comments on a published story are in. A comment
+moderation queue, a paywall, and typo-tolerant search are not.

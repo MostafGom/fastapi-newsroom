@@ -34,11 +34,12 @@ The first engine is PostgreSQL full-text, in the same database as the articles:
 - A GIN index. Updates happen in the same transaction as publish, publish-update, and
   unpublish, so the public page and the index cannot disagree.
 - `websearch_to_tsquery` for the query, `ts_rank_cd` for rank, `ts_headline` for the
-  snippet.
+  snippet. The last bare word is a prefix. Quoted phrases and `OR` are not prefixed.
+- Arabic text is normalized before indexing and querying.
 - No leading-wildcard `LIKE`.
 
-Pagination is by `(published_at, id)` after a rank threshold, not by an unstable rank
-cursor.
+A text query is ordered by rank, then `published_at`, then id. The cursor carries the rank.
+Filter-only results stay on `(published_at, id)`.
 
 A later engine (Meilisearch, Typesense, OpenSearch) replaces the repository behind
 `SearchService` only. Routes, filters, and the hit shape stay. Move when we need typo

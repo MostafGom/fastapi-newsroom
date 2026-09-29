@@ -55,6 +55,9 @@ erDiagram
 | is_enabled | `bool` | disabled locales are hidden from public routes |
 | sort_order | `int` | |
 
+### `site_settings`
+One row (`id = 1`): `site_name`, `registration_enabled`. Mail and database credentials stay in the environment.
+
 ### `users` — login identity only
 | column | type | notes |
 |---|---|---|
@@ -218,14 +221,45 @@ Join tables: `article_authors(article_id, author_id, position)`, `article_tags(a
 | first_published_at | `timestamptz` NULL | never changes once set |
 | update_requested_at | `timestamptz` NULL | writer proposed an update to a live article |
 | lock_version | `int` | optimistic concurrency on metadata changes |
-| search_vector | `tsvector` NULL | built with `arabic`/`english` config per locale |
 | legal_hold | `bool` | publish and schedule are refused until cleared |
 | deleted_at | `timestamptz` NULL | only allowed when `first_published_at IS NULL` |
 | created_at / updated_at | `timestamptz` | |
 
 Indexes: `(status, publish_at) WHERE status = 'scheduled'`, `(status, unpublish_at) WHERE unpublish_at IS NOT NULL`,
-`(locale, published_at DESC) WHERE status = 'published'`, GIN on `search_vector`.
+`(locale, published_at DESC) WHERE status = 'published'`.
+
+The search vector is not a column here. It lives on `search_documents` so the engine can be replaced without rewriting articles.
 Check: `ck_deleted_never_published`: `deleted_at IS NULL OR first_published_at IS NULL`.
+
+### `search_documents`
+One row per published localization. Written in the same transaction as publish, republish, a published slug change, and takedown. Drafts and unpublished stories have no row.
+
+| column | type | notes |
+|---|---|---|
+| localization_id | FK → article_localizations ON DELETE CASCADE | primary key |
+| locale / slug / title / excerpt | text | copied from the published revision |
+| body_text | `text` | plain text of the TipTap body |
+| section_id / section_slug / section_name | | denormalized filters |
+| tag_slugs | `text[]` | tag filter, not part of the query parser |
+| published_at | `timestamptz` | text queries sort by rank, then this; filters sort by this |
+| document | `tsvector` | `arabic` or `english` config; GIN index |
+
+Weights: title A, excerpt B, body C, tags and bylines D. Text queries sort by rank, then `published_at`. Arabic is normalized before the stemmer, and the last bare word of a query is a prefix.
+
+### `media_assets` / `media_translations`
+`media_assets(id, storage_key, mime_type, width, height, byte_size, credit, uploaded_by, created_at)`.
+Files are stored on disk under `MEDIA_DIR`. `/media/{id}` serves a 1600px JPEG for display. `/media/{id}/original` serves the uploaded file.
+`media_translations(media_id, locale, caption, alt_text)`.
+
+### `homepage_slots`
+`(locale, position)` primary key, `localization_id` of a published story, optional `label`. Empty means the home page lists the latest stories.
+
+### `newsletter_issues` / `newsletter_deliveries`
+One issue per locale per day (`edition_date`), with the story slugs it contained.
+One delivery row per opted-in reader whose preferred locale matches. If `SMTP_HOST` is set, the worker sends the briefing before recording the row. Without it, the row is the record and nothing is mailed.
+
+### `comments`
+`id`, `localization_id`, `user_id`, `body`, `created_at`, `hidden_at`. A reader can hide their own comment. An editor can hide one from the story. There is no moderation queue.
 
 ### `article_revisions` — immutable
 | column | type | notes |
@@ -244,7 +278,7 @@ Check: `ck_deleted_never_published`: `deleted_at IS NULL OR first_published_at I
 | created_by | FK → users | |
 | created_at | `timestamptz` | |
 
-No `updated_at`: rows are never updated. The app role has no `UPDATE` grant in production.
+No `updated_at`. The only update is an autosave by the same user, younger than five minutes, that nothing else points at. A manual save always appends a row.
 
 ### `slug_redirects`
 `(locale, old_slug) PK`, `localization_id` FK, `created_at`. Checked before a public 404.

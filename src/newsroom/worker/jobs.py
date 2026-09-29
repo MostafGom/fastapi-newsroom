@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from newsroom.articles.service import ArticleService
 from newsroom.auth.models import AuthSession
+from newsroom.newsletters.service import NewsletterService
 
 Job = Callable[[AsyncSession], Awaitable[int]]
 
@@ -31,7 +32,12 @@ async def publish_scheduled(db: AsyncSession) -> int:
     return published + expired
 
 
+async def send_newsletters(db: AsyncSession) -> int:
+    return await NewsletterService(db).send_due()
+
+
 JOBS: dict[str, Job] = {
     "publish_scheduled": publish_scheduled,
+    "send_newsletters": send_newsletters,
     "prune_sessions": prune_sessions,
 }

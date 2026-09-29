@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from newsroom.core.config import Settings
+from newsroom.core.site import load_site_context
 
 
 def create_engine(settings: Settings) -> AsyncEngine:
@@ -31,6 +32,7 @@ async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
     sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
     async with sessionmaker() as session:
         try:
+            await load_site_context(request, session)
             yield session
         except BaseException:
             await session.rollback()

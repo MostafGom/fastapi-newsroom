@@ -1,0 +1,49 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("manage.authors") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold">{{ _("manage.authors") }}</h1>
+{% include "admin/partials/notice.html" %}
+<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/authors">
+  <h2 class="font-bold">{{ _("manage.create_author") }}</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="grid gap-1">{{ _("manage.kind") }}
+    <select class="border border-line px-2 py-1" name="kind">
+      {% for kind in kinds %}
+        <option value="{{ kind.value }}">{{ _("author.kind." ~ kind.value) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="grid gap-1">{{ _("manage.key") }}
+    <input class="border border-line px-2 py-1" name="key" required dir="ltr" pattern="[a-z0-9_-]+">
+  </label>
+  {% for code in supported_locales %}
+    <fieldset class="grid gap-1">
+      <legend>{{ locale_names.get(code, code) }}</legend>
+      <label class="grid gap-1">{{ _("manage.name") }}
+        <input class="border border-line px-2 py-1" name="name_{{ code }}">
+      </label>
+      <label class="grid gap-1">{{ _("manage.slug") }}
+        <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr">
+      </label>
+    </fieldset>
+  {% endfor %}
+  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.create_author") }}</button>
+</form>
+{% if authors %}
+  <ul class="grid gap-2">
+    {% for author in authors %}
+      <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+        <span>{{ author.display_name }} <span class="text-sm text-muted" dir="ltr">{{ author.key }} · {{ author.kind.value }}</span></span>
+        {% if author.kind.value != "staff" %}
+          <form method="post" action="/admin/authors/{{ author.id }}/delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit">{{ _("manage.revoke") }}</button>
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">{{ _("manage.no_authors") }}</p>
+{% endif %}
+{% endblock %}

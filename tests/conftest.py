@@ -6,11 +6,14 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from newsroom.core.config import Settings, get_settings
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def _configure_test_env() -> Settings:
@@ -25,6 +28,7 @@ def _configure_test_env() -> Settings:
         COOKIE_SECURE="false",
         LOG_JSON="false",
         LOG_LEVEL="WARNING",
+        MEDIA_DIR=str(ROOT / ".test-media"),
     )
     get_settings.cache_clear()
     return get_settings()
@@ -36,7 +40,6 @@ from newsroom.core.db import get_db  # noqa: E402
 from newsroom.main import create_app  # noqa: E402
 from newsroom.users.service import UserService  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
 STAFF_PASSWORD = "correct-horse-battery"
 
 
@@ -93,7 +96,10 @@ async def db(connection: AsyncConnection) -> AsyncIterator[AsyncSession]:
 async def client(db: AsyncSession, settings: Settings) -> AsyncIterator[AsyncClient]:
     app = create_app(settings)
 
-    async def override_db() -> AsyncIterator[AsyncSession]:
+    async def override_db(request: Request) -> AsyncIterator[AsyncSession]:
+        from newsroom.core.site import load_site_context
+
+        await load_site_context(request, db)
         yield db
 
     app.dependency_overrides[get_db] = override_db

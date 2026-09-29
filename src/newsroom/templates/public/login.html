@@ -2,6 +2,9 @@
 {% block title %}{{ _("account.login") }} · {{ _("site.title") }}{% endblock %}
 {% block body %}
 <main class="mx-auto max-w-sm px-6 py-10">
+  {% if mode == "register" and not registration_open %}
+    <p>{{ _("account.registration_closed") }}</p>
+  {% else %}
   <form class="grid gap-3 rounded-md border border-line bg-card p-5" method="post">
     <h1 class="text-xl font-bold">{{ _("account.login") if mode == "login" else _("account.register") }}</h1>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -19,10 +22,11 @@
     </label>
     <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("account.login") if mode == "login" else _("account.register") }}</button>
   </form>
+  {% endif %}
   <p class="mt-4 text-sm">
-    {% if mode == "login" %}
+    {% if mode == "login" and registration_open %}
       <a href="/{{ locale }}/register">{{ _("account.register") }}</a>
-    {% else %}
+    {% elif mode != "login" %}
       <a href="/{{ locale }}/login">{{ _("account.login") }}</a>
     {% endif %}
   </p>

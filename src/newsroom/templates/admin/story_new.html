@@ -42,6 +42,17 @@
   <label class="grid gap-1">{{ _("desk.excerpt") }}
     <textarea class="border border-line px-2 py-1" name="excerpt" rows="2">{{ form.excerpt or '' }}</textarea>
   </label>
+  {% if authors %}
+    <fieldset class="grid gap-1">
+      <legend>{{ _("desk.bylines") }}</legend>
+      {% for author in authors %}
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="author_ids" value="{{ author.id }}" {% if form.author_ids and author.id|string in form.author_ids %}checked{% endif %}>
+          {{ author.display_name }}
+        </label>
+      {% endfor %}
+    </fieldset>
+  {% endif %}
   {% if tags %}
     <fieldset class="grid gap-1">
       <legend>{{ _("desk.tags") }}</legend>
