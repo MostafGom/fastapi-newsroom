@@ -1,0 +1,7 @@
+{% if article.is_breaking %}
+  <p class="kicker">{{ _("article.breaking") }}</p>
+{% elif labels is defined and labels.get(article.slug) %}
+  <p class="kicker">{{ labels.get(article.slug) }}</p>
+{% else %}
+  <p class="meta"><a class="no-underline" href="/{{ locale }}/section/{{ article.section.slug }}">{{ article.section.name }}</a></p>
+{% endif %}

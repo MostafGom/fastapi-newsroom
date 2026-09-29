@@ -40,10 +40,21 @@ async def supported_locale(
     enabled = getattr(request.state, "enabled_locales", None) or get_settings().supported_locales
     if locale not in enabled:
         raise HTTPException(status_code=404)
+    request.state.nav_sections = await TaxonomyService(db).public_sections(locale)
     return locale
 
 
 LocaleParam = Annotated[str, Depends(supported_locale)]
+
+
+def _section_name(nodes, slug: str) -> str | None:
+    for node in nodes:
+        if node.slug == slug:
+            return node.name
+        found = _section_name(node.children, slug)
+        if found:
+            return found
+    return None
 
 
 @router.get("/")
@@ -103,8 +114,17 @@ async def section(
     page = await ArticleService(db).list_public(
         locale, PageParams(limit=20, cursor=None), section_slug=slug, tag_slug=None
     )
+    sections = getattr(request.state, "nav_sections", [])
     return templates.TemplateResponse(
-        request, "public/home.html", {"reader": reader, "articles": page.items}
+        request,
+        "public/home.html",
+        {
+            "reader": reader,
+            "articles": page.items,
+            "heading": _section_name(sections, slug) or slug,
+            "current_section": slug,
+            "empty_key": "home.empty",
+        },
     )
 
 
@@ -119,7 +139,12 @@ async def tag(
     return templates.TemplateResponse(
         request,
         "public/home.html",
-        {"reader": reader, "articles": page.items, "heading": found.name},
+        {
+            "reader": reader,
+            "articles": page.items,
+            "heading": found.name,
+            "empty_key": "tag.empty",
+        },
     )
 
 

@@ -1,40 +1,32 @@
 {% extends "base.html" %}
 {% block title %}{{ _("search.heading") }} · {{ _("site.title") }}{% endblock %}
 {% block body %}
-<header class="flex items-center justify-between border-b border-line bg-card px-6 py-4">
-  <a class="text-xl font-bold text-accent no-underline" href="/{{ locale }}/">{{ _("site.title") }}</a>
-  <nav class="flex items-center gap-4" aria-label="{{ _('site.languages') }}">
-    {% if reader %}
-      <a href="/{{ locale }}/account">{{ reader.user.display_name or reader.user.email }}</a>
-    {% else %}
-      <a href="/{{ locale }}/login">{{ _("account.login") }}</a>
-    {% endif %}
-    {% for code in supported_locales %}
-      <a class="{% if code == locale %}font-bold{% endif %}" href="/{{ code }}/search?q={{ query|urlencode }}" {% if code == locale %}aria-current="page"{% endif %}>{{ _("locale." ~ code) }}</a>
-    {% endfor %}
-  </nav>
-</header>
-<main class="mx-auto max-w-5xl px-6 py-6">
-  <h1 class="mb-4 text-2xl font-bold">{{ _("search.heading") }}</h1>
-  <form class="mb-6 flex items-center gap-3" method="get" action="/{{ locale }}/search">
-    <input class="border border-line px-2 py-1" name="q" value="{{ query }}" placeholder="{{ _('search.placeholder') }}">
-    <button class="border border-line px-3 py-1" type="submit">{{ _("search.submit") }}</button>
+{% include "public/partials/header.html" %}
+<main class="mx-auto max-w-5xl px-6 py-8">
+  <h1 class="headline mb-6 text-3xl">{{ _("search.heading") }}</h1>
+  <form class="mb-8 flex flex-wrap items-center gap-3" method="get" action="/{{ locale }}/search">
+    <input class="min-w-64 flex-1" name="q" value="{{ query }}" placeholder="{{ _('search.placeholder') }}">
+    <button type="submit">{{ _("search.submit") }}</button>
   </form>
   {% if hits %}
-    <ul class="grid gap-4">
+    <ul>
       {% for hit in hits %}
-        <li class="rounded-md border border-line bg-card p-4">
-          <p class="text-sm text-muted">{{ hit.section_name }}</p>
-          <a class="text-xl font-bold text-ink no-underline" href="/{{ locale }}/article/{{ hit.slug }}">{{ hit.title }}</a>
-          {% if hit.snippet %}<p class="mt-1 text-muted">{{ hit.snippet|safe }}</p>{% endif %}
+        <li class="border-b border-line py-5">
+          <p class="meta"><a class="no-underline" href="/{{ locale }}/section/{{ hit.section_slug }}">{{ hit.section_name }}</a></p>
+          <h2 class="headline mt-1 text-2xl">
+            <a class="text-ink no-underline" href="/{{ locale }}/article/{{ hit.slug }}">{{ hit.title }}</a>
+          </h2>
+          {% if hit.snippet %}<p class="mt-2 text-muted">{{ hit.snippet|safe }}</p>{% endif %}
+          <p class="meta mt-2"><time datetime="{{ hit.published_at.isoformat() }}">{{ format_date(hit.published_at, locale) }}</time></p>
         </li>
       {% endfor %}
     </ul>
     {% if next_cursor %}
-      <p class="mt-4"><a href="/{{ locale }}/search?q={{ query|urlencode }}&amp;cursor={{ next_cursor|urlencode }}">{{ _("search.submit") }}</a></p>
+      <p class="mt-6"><a href="/{{ locale }}/search?q={{ query|urlencode }}&amp;cursor={{ next_cursor|urlencode }}">{{ _("search.more") }}</a></p>
     {% endif %}
   {% elif query %}
     <p class="text-muted">{{ _("search.empty") }}</p>
   {% endif %}
 </main>
+{% include "public/partials/footer.html" %}
 {% endblock %}

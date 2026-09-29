@@ -1,47 +1,49 @@
 {% extends "base.html" %}
 {% block title %}{{ _("account.title") }} · {{ _("site.title") }}{% endblock %}
 {% block body %}
+{% include "public/partials/header.html" %}
 <main class="mx-auto max-w-3xl px-6 py-8">
-  <div class="mb-6 flex items-center justify-between">
-    <h1 class="text-2xl font-bold">{{ _("account.title") }}</h1>
+  <div class="mb-6 flex items-center justify-between gap-4">
+    <h1 class="text-3xl">{{ _("account.title") }}</h1>
     <form method="post" action="/{{ locale }}/logout">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit">{{ _("account.logout") }}</button>
+      <button class="btn-quiet" type="submit">{{ _("account.logout") }}</button>
     </form>
   </div>
-  <form class="grid max-w-md gap-3 rounded-md border border-line bg-card p-5" method="post">
+  <form class="grid max-w-md gap-3 border border-line bg-card p-5" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label class="grid gap-1">{{ _("account.name") }}
-      <input class="border border-line px-2 py-1" name="display_name" value="{{ profile.display_name or '' }}">
+    <label class="grid gap-1 font-ui text-sm">{{ _("account.name") }}
+      <input name="display_name" value="{{ profile.display_name or '' }}">
     </label>
-    <label class="grid gap-1">{{ _("account.locale") }}
-      <select class="border border-line px-2 py-1" name="preferred_locale">
+    <label class="grid gap-1 font-ui text-sm">{{ _("account.locale") }}
+      <select name="preferred_locale">
         {% for code in supported_locales %}
           <option value="{{ code }}" {% if profile.preferred_locale == code %}selected{% endif %}>{{ _("locale." ~ code) }}</option>
         {% endfor %}
       </select>
     </label>
-    <label class="flex items-center gap-2">
+    <label class="flex items-center gap-2 font-ui text-sm">
       <input type="checkbox" name="newsletter_opt_in" value="1" {% if profile.newsletter_opt_in %}checked{% endif %}>
       {{ _("account.newsletter") }}
     </label>
-    <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("account.save") }}</button>
+    <button type="submit">{{ _("account.save") }}</button>
   </form>
-  <h2 class="mt-8 text-xl font-bold">{{ _("account.bookmarks") }}</h2>
+  <h2 class="mt-10 font-ui text-lg font-semibold">{{ _("account.bookmarks") }}</h2>
   {% if bookmarks %}
-    <ul class="mt-3 grid gap-3">
+    <ul class="mt-3">
       {% for article in bookmarks %}
-        <li class="flex items-center justify-between gap-4 rounded-md border border-line bg-card p-3">
+        <li class="flex items-center justify-between gap-4 border-b border-line py-3">
           <a href="/{{ article.locale }}/article/{{ article.slug }}">{{ article.title }}</a>
           <form method="post" action="/{{ locale }}/account/bookmarks/{{ article.id }}/remove">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit">{{ _("account.remove") }}</button>
+            <button class="btn-quiet" type="submit">{{ _("account.remove") }}</button>
           </form>
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p class="text-muted">{{ _("account.no_bookmarks") }}</p>
+    <p class="meta mt-2">{{ _("account.no_bookmarks") }}</p>
   {% endif %}
 </main>
+{% include "public/partials/footer.html" %}
 {% endblock %}

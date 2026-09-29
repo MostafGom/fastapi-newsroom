@@ -13,6 +13,7 @@ from newsroom.articles.service import ArticleService
 from newsroom.audit.service import record_event
 from newsroom.auth.service import utcnow
 from newsroom.core.config import Settings, get_settings
+from newsroom.core.i18n import translate
 from newsroom.core.schemas import PageParams
 from newsroom.homepage.service import HomepageService
 from newsroom.newsletters.models import NewsletterDelivery, NewsletterIssue
@@ -111,7 +112,7 @@ class NewsletterService:
 
 
 def _briefing(base_url: str, locale: str, stories) -> str:
-    lines: list[str] = []
+    lines = [translate(locale, "site.title"), ""]
     root = base_url.rstrip("/")
     for story in stories:
         lines.append(story.title)

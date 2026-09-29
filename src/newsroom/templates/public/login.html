@@ -1,29 +1,30 @@
 {% extends "base.html" %}
 {% block title %}{{ _("account.login") }} · {{ _("site.title") }}{% endblock %}
 {% block body %}
+{% include "public/partials/header.html" %}
 <main class="mx-auto max-w-sm px-6 py-10">
   {% if mode == "register" and not registration_open %}
     <p>{{ _("account.registration_closed") }}</p>
   {% else %}
-  <form class="grid gap-3 rounded-md border border-line bg-card p-5" method="post">
-    <h1 class="text-xl font-bold">{{ _("account.login") if mode == "login" else _("account.register") }}</h1>
+  <form class="grid gap-3 border border-line bg-card p-5" method="post">
+    <h1 class="text-2xl">{{ _("account.login") if mode == "login" else _("account.register") }}</h1>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     {% if error %}<p class="text-accent" role="alert">{{ _(error) }}</p>{% endif %}
     {% if mode == "register" %}
-      <label class="grid gap-1">{{ _("account.name") }}
-        <input class="border border-line px-2 py-1" name="display_name">
+      <label class="grid gap-1 font-ui text-sm">{{ _("account.name") }}
+        <input name="display_name">
       </label>
     {% endif %}
-    <label class="grid gap-1">{{ _("admin.login.email") }}
-      <input class="border border-line px-2 py-1" type="email" name="email" required dir="ltr">
+    <label class="grid gap-1 font-ui text-sm">{{ _("admin.login.email") }}
+      <input type="email" name="email" required dir="ltr">
     </label>
-    <label class="grid gap-1">{{ _("admin.login.password") }}
-      <input class="border border-line px-2 py-1" type="password" name="password" required dir="ltr">
+    <label class="grid gap-1 font-ui text-sm">{{ _("admin.login.password") }}
+      <input type="password" name="password" required dir="ltr">
     </label>
-    <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("account.login") if mode == "login" else _("account.register") }}</button>
+    <button type="submit">{{ _("account.login") if mode == "login" else _("account.register") }}</button>
   </form>
   {% endif %}
-  <p class="mt-4 text-sm">
+  <p class="mt-4 font-ui text-sm">
     {% if mode == "login" and registration_open %}
       <a href="/{{ locale }}/register">{{ _("account.register") }}</a>
     {% elif mode != "login" %}
@@ -31,4 +32,5 @@
     {% endif %}
   </p>
 </main>
+{% include "public/partials/footer.html" %}
 {% endblock %}

@@ -1,37 +1,49 @@
 {% extends "base.html" %}
 {% block title %}{% if heading %}{{ heading }} · {% endif %}{{ _("site.title") }}{% endblock %}
 {% block body %}
-<header class="flex items-center justify-between border-b border-line bg-card px-6 py-4">
-  <a class="text-xl font-bold text-accent no-underline" href="/{{ locale }}/">{{ _("site.title") }}</a>
-  <nav class="flex items-center gap-4" aria-label="{{ _('site.languages') }}">
-    <a href="/{{ locale }}/search">{{ _("search.nav") }}</a>
-    {% if reader %}
-      <a href="/{{ locale }}/account">{{ reader.user.display_name or reader.user.email }}</a>
-    {% else %}
-      <a href="/{{ locale }}/login">{{ _("account.login") }}</a>
-    {% endif %}
-    {% for code in supported_locales %}
-      <a class="{% if code == locale %}font-bold{% endif %}" href="/{{ code }}/" {% if code == locale %}aria-current="page"{% endif %}>{{ _("locale." ~ code) }}</a>
-    {% endfor %}
-  </nav>
-</header>
-<main class="mx-auto max-w-5xl px-6 py-6">
-  <h1 class="mb-4 text-2xl font-bold">{{ heading or _("home.heading") }}</h1>
+{% include "public/partials/header.html" %}
+<main class="mx-auto max-w-5xl px-6 py-8">
+  {% if heading %}
+    <h1 class="headline mb-8 text-3xl">{{ heading }}</h1>
+  {% endif %}
   {% if articles %}
-    <ul class="grid gap-4">
-      {% for article in articles %}
-        <li class="rounded-md border border-line bg-card p-4">
-          {% if labels is defined and labels.get(article.slug) %}
-            <p class="text-sm text-accent">{{ labels.get(article.slug) }}</p>
-          {% endif %}
-          <p class="text-sm text-muted">{{ article.section.name }}</p>
-          <a class="text-xl font-bold text-ink no-underline" href="/{{ locale }}/article/{{ article.slug }}">{{ article.title }}</a>
-          {% if article.excerpt %}<p class="mt-1 text-muted">{{ article.excerpt }}</p>{% endif %}
-        </li>
-      {% endfor %}
-    </ul>
+    {% set lead = articles[0] %}
+    <article class="border-b border-line pb-8">
+      {% set article = lead %}
+      {% include "public/partials/kicker.html" %}
+      <h2 class="headline headline-lead mt-2">
+        <a class="text-ink no-underline" href="/{{ locale }}/article/{{ lead.slug }}">{{ lead.title }}</a>
+      </h2>
+      {% if lead.excerpt %}<p class="deck mt-3">{{ lead.excerpt }}</p>{% endif %}
+      <p class="meta mt-3">
+        {% if lead.bylines %}
+          {{ _("article.by") }}
+          {% for byline in lead.bylines %}{{ byline.display_name }}{% if not loop.last %}{{ "، " if direction == "rtl" else ", " }}{% endif %}{% endfor %}
+          ·
+        {% endif %}
+        <time datetime="{{ lead.published_at.isoformat() }}">{{ format_date(lead.published_at, locale) }}</time>
+      </p>
+      {% if lead.lead_image_url %}
+        <img class="mt-5 aspect-[16/9] w-full object-cover" src="{{ lead.lead_image_url }}" alt="">
+      {% endif %}
+    </article>
+    {% if articles|length > 1 %}
+      <ul>
+        {% for article in articles[1:] %}
+          <li class="border-b border-line py-5">
+            {% include "public/partials/kicker.html" %}
+            <h2 class="headline mt-1 text-2xl">
+              <a class="text-ink no-underline" href="/{{ locale }}/article/{{ article.slug }}">{{ article.title }}</a>
+            </h2>
+            {% if article.excerpt %}<p class="mt-1 text-muted">{{ article.excerpt }}</p>{% endif %}
+            <p class="meta mt-2"><time datetime="{{ article.published_at.isoformat() }}">{{ format_date(article.published_at, locale) }}</time></p>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
   {% else %}
-    <p class="text-muted">{{ _("tag.empty") if heading else _("home.empty") }}</p>
+    <p class="text-muted">{{ _(empty_key if empty_key is defined else "home.empty") }}</p>
   {% endif %}
 </main>
+{% include "public/partials/footer.html" %}
 {% endblock %}

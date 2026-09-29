@@ -1,72 +1,72 @@
 {% extends "base.html" %}
 {% block title %}{{ article.title }} · {{ _("site.title") }}{% endblock %}
 {% block body %}
-<header class="flex items-center justify-between border-b border-line bg-card px-6 py-4">
-  <a class="text-xl font-bold text-accent no-underline" href="/{{ locale }}/">{{ _("site.title") }}</a>
-  <a href="/{{ locale }}/section/{{ article.section.slug }}">{{ article.section.name }}</a>
-</header>
-<main class="mx-auto max-w-3xl px-6 py-8">
-  <h1 class="text-3xl font-bold">{{ article.title }}</h1>
-  {% if article.subtitle %}<p class="mt-2 text-xl text-muted">{{ article.subtitle }}</p>{% endif %}
-  <p class="mt-3 text-sm text-muted">{{ _("article.by") }}
-    {% for byline in article.bylines %}{{ byline.display_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+{% include "public/partials/header.html" %}
+<main class="mx-auto max-w-[40rem] px-6 py-8">
+  <p class="meta"><a class="no-underline" href="/{{ locale }}/section/{{ article.section.slug }}">{{ article.section.name }}</a></p>
+  <h1 class="headline headline-story mt-2">{{ article.title }}</h1>
+  {% if article.subtitle %}<p class="deck mt-3">{{ article.subtitle }}</p>{% endif %}
+  <p class="meta mt-4">{{ _("article.by") }}
+    {% for byline in article.bylines %}{{ byline.display_name }}{% if not loop.last %}{{ "، " if direction == "rtl" else ", " }}{% endif %}{% endfor %}
+    · <time datetime="{{ article.published_at.isoformat() }}">{{ format_date(article.published_at, locale) }}</time>
   </p>
+  {% if article.corrections %}
+    <aside class="correction mt-6">
+      {% for note in article.corrections %}
+        <p><strong>{{ _("correction." ~ note.kind.value) }}.</strong> {{ note.text }}</p>
+      {% endfor %}
+    </aside>
+  {% endif %}
+  {% if article.lead_image_url %}
+    <figure class="mt-6">
+      <img class="w-full" src="{{ article.lead_image_url }}" alt="{{ lead_alt or article.title }}">
+      {% if lead_caption %}<figcaption class="meta mt-2">{{ lead_caption }}</figcaption>{% endif %}
+    </figure>
+  {% endif %}
+  <article class="article-body mt-6">{{ article.body_html|safe }}</article>
   {% if article.tags %}
-    <ul class="mt-4 flex flex-wrap gap-3 text-sm">
+    <ul class="mt-8 flex flex-wrap gap-3 font-ui text-sm">
       {% for tag in article.tags %}
         <li><a href="/{{ locale }}/tag/{{ tag.slug }}">{{ tag.name }}</a></li>
       {% endfor %}
     </ul>
   {% endif %}
   {% if reader %}
-    <form class="mt-4" method="post" action="/{{ locale }}/article/{{ article.slug }}/bookmark">
+    <form class="mt-6" method="post" action="/{{ locale }}/article/{{ article.slug }}/bookmark">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="border border-line px-3 py-1" type="submit">{{ _("account.bookmark") if not bookmarked else _("account.saved") }}</button>
+      <button class="btn-quiet" type="submit">{{ _("account.bookmark") if not bookmarked else _("account.saved") }}</button>
     </form>
   {% endif %}
-  {% if article.lead_image_url %}
-    <figure class="mt-6">
-      <img src="{{ article.lead_image_url }}" alt="{{ lead_alt or article.title }}">
-      {% if lead_caption %}<figcaption class="mt-1 text-sm text-muted">{{ lead_caption }}</figcaption>{% endif %}
-    </figure>
-  {% endif %}
-  <article class="prose mt-6">{{ article.body_html|safe }}</article>
-  <section class="mt-8">
-    <h2 class="text-xl font-bold">{{ _("comments.heading") }}</h2>
+  <section class="mt-10 border-t border-line pt-6">
+    <h2 class="font-ui text-lg font-semibold">{{ _("comments.heading") }}</h2>
     {% if comments %}
       <ul class="mt-4 grid gap-4">
         {% for comment in comments %}
-          <li class="rounded-md border border-line bg-card p-4">
-            <p class="text-sm text-muted">{{ comment.author_name }}</p>
-            <p>{{ comment.body }}</p>
+          <li class="border-b border-line pb-4">
+            <p class="meta">{{ comment.author_name }}</p>
+            <p class="mt-1">{{ comment.body }}</p>
             {% if comment.mine %}
-              <form method="post" action="/{{ locale }}/article/{{ article.slug }}/comments/{{ comment.id }}/hide">
+              <form class="mt-2" method="post" action="/{{ locale }}/article/{{ article.slug }}/comments/{{ comment.id }}/hide">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button class="border border-line px-3 py-1" type="submit">{{ _("comments.remove") }}</button>
+                <button class="btn-quiet" type="submit">{{ _("comments.remove") }}</button>
               </form>
             {% endif %}
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <p class="mt-2 text-muted">{{ _("comments.empty") }}</p>
+      <p class="meta mt-2">{{ _("comments.empty") }}</p>
     {% endif %}
     {% if reader %}
       <form class="mt-4 grid gap-3" method="post" action="/{{ locale }}/article/{{ article.slug }}/comments">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <textarea class="border border-line px-2 py-1" name="body" maxlength="2000" required></textarea>
-        <button class="border border-line px-3 py-1" type="submit">{{ _("comments.submit") }}</button>
+        <textarea name="body" maxlength="2000" required rows="4"></textarea>
+        <button type="submit">{{ _("comments.submit") }}</button>
       </form>
     {% else %}
       <p class="mt-4"><a href="/{{ locale }}/login">{{ _("comments.sign_in") }}</a></p>
     {% endif %}
   </section>
-  {% if article.corrections %}
-    <aside class="mt-8 border-s-4 border-accent ps-4">
-      {% for note in article.corrections %}
-        <p><strong>{{ _("correction." ~ note.kind.value) }}.</strong> {{ note.text }}</p>
-      {% endfor %}
-    </aside>
-  {% endif %}
 </main>
+{% include "public/partials/footer.html" %}
 {% endblock %}
