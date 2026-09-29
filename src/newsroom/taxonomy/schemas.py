@@ -65,6 +65,11 @@ class TagOut(Schema):
     slug: str
 
 
+class TagMerge(Schema):
+    source_id: uuid.UUID
+    target_id: uuid.UUID
+
+
 class TagAdminOut(Schema):
     id: uuid.UUID
     key: str

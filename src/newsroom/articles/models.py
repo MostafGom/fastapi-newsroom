@@ -64,7 +64,9 @@ class Article(UUIDPrimaryKey, Timestamps, Base):
 
     section_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sections.id"), index=True)
     article_type: Mapped[ArticleType] = mapped_column(pg_enum(ArticleType, "article_type"))
-    lead_media_id: Mapped[uuid.UUID | None]
+    lead_media_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL")
+    )
     is_breaking: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
 

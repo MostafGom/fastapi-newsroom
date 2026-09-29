@@ -1,6 +1,6 @@
 import pytest
 
-from newsroom.articles.body import InvalidBody, render_body
+from newsroom.articles.body import InvalidBody, plain_text, render_body
 
 
 def _doc(*blocks: dict) -> dict:
@@ -77,14 +77,29 @@ def test_rejects_unsafe_links_and_images_without_alt() -> None:
                 }
             )
         )
+    media = "/media/01900000-0000-7000-8000-000000000001"
     with pytest.raises(InvalidBody):
-        render_body(_doc({"type": "image", "attrs": {"src": "/media/a.jpg", "alt": "  "}}))
+        render_body(_doc({"type": "image", "attrs": {"src": media, "alt": "  "}}))
+    with pytest.raises(InvalidBody):
+        render_body(
+            _doc({"type": "image", "attrs": {"src": "https://cdn.example/a.jpg", "alt": "x"}})
+        )
+    with pytest.raises(InvalidBody):
+        render_body(_doc({"type": "image", "attrs": {"src": "/media/a.jpg", "alt": "x"}}))
 
-    html = render_body(
-        _doc({"type": "image", "attrs": {"src": "/media/a.jpg", "alt": "The chamber"}})
-    )
-    assert 'src="/media/a.jpg"' in html
+    html = render_body(_doc({"type": "image", "attrs": {"src": media, "alt": "The chamber"}}))
+    assert f'src="{media}"' in html
     assert 'alt="The chamber"' in html
+
+
+def test_plain_text_keeps_words_and_image_alt() -> None:
+    text = plain_text(
+        _doc(
+            {"type": "paragraph", "content": [_text("The cabinet"), _text("approved the budget.")]},
+            {"type": "image", "attrs": {"src": "/media/a.jpg", "alt": "The chamber"}},
+        )
+    )
+    assert text == "The cabinet approved the budget. The chamber"
 
 
 def test_body_heading_cannot_be_h1() -> None:

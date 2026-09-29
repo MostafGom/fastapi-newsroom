@@ -36,6 +36,20 @@
   {% if next_cursor %}
     <p class="mt-4"><a href="/admin/tags?cursor={{ next_cursor }}">{{ _("manage.more") }}</a></p>
   {% endif %}
+  <form class="mt-6 flex flex-wrap items-center gap-3" method="post" action="/admin/tags/merge">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ _("manage.merge_from") }}
+      <select class="border border-line px-2 py-1" name="source_id" required>
+        {% for tag in tags %}<option value="{{ tag.id }}">{{ tag.key }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{{ _("manage.merge_into") }}
+      <select class="border border-line px-2 py-1" name="target_id" required>
+        {% for tag in tags %}<option value="{{ tag.id }}">{{ tag.key }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="border border-line px-3 py-1" type="submit">{{ _("manage.merge") }}</button>
+  </form>
 {% else %}
   <p class="text-muted">{{ _("manage.no_tags") }}</p>
 {% endif %}

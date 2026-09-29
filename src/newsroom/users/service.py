@@ -3,13 +3,15 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from newsroom.articles.models import Author, AuthorKind, AuthorTranslation
 from newsroom.audit.service import record_event
 from newsroom.auth.principal import Principal
 from newsroom.authz.authorizer import DbAuthorizer
-from newsroom.authz.models import Role, UserRole
-from newsroom.authz.permissions import SUPER_ADMIN_ROLE
+from newsroom.authz.models import Permission, Role, UserRole
+from newsroom.authz.permissions import SUPER_ADMIN_ROLE, Perm
 from newsroom.authz.policies import ensure_can_grant_role, ensure_outranks
 from newsroom.core.errors import Conflict, NotFound, PermissionDenied
 from newsroom.core.schemas import Page, PageParams, decode_cursor, encode_cursor
@@ -17,8 +19,10 @@ from newsroom.core.security import hash_password
 from newsroom.users.models import ReaderProfile, StaffProfile, User, UserKind, UserStatus
 from newsroom.users.repository import UserRepository, normalize_email
 from newsroom.users.schemas import (
+    RoleCreate,
     RoleGrantCreate,
     RoleOut,
+    RoleUpdate,
     StaffCreate,
     UserOut,
     UserRoleOut,
@@ -274,20 +278,101 @@ class UserService:
         )
         await self.db.commit()
 
+    async def create_role(self, actor: Principal, payload: RoleCreate) -> RoleOut:
+        self._require_role_manager(actor, payload.rank)
+        if payload.key == SUPER_ADMIN_ROLE or payload.key in {
+            "writer",
+            "copy_editor",
+            "editor",
+            "admin",
+        }:
+            raise Conflict("That key is reserved for a system role")
+        role = Role(
+            id=uuid.uuid7(),
+            key=payload.key,
+            name=payload.name.strip(),
+            description=payload.description,
+            is_system=False,
+            rank=payload.rank,
+        )
+        self.db.add(role)
+        set_committed_value(role, "permissions", [])
+        role.permissions = await self._permissions(payload.permissions)
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="role.created",
+            entity_type="role",
+            entity_id=role.id,
+            after={"key": role.key, "rank": role.rank, "permissions": payload.permissions},
+        )
+        await self.db.commit()
+        return self._role_out(role)
+
+    async def update_role(
+        self, actor: Principal, role_id: uuid.UUID, payload: RoleUpdate
+    ) -> RoleOut:
+        role = await self.db.scalar(
+            select(Role).where(Role.id == role_id).options(selectinload(Role.permissions))
+        )
+        if role is None:
+            raise NotFound("Role not found")
+        if role.is_system:
+            raise Conflict("System roles are defined in code")
+        rank = payload.rank if payload.rank is not None else role.rank
+        self._require_role_manager(actor, rank)
+        if payload.name is not None:
+            role.name = payload.name.strip()
+        if payload.description is not None:
+            role.description = payload.description
+        if payload.rank is not None:
+            role.rank = payload.rank
+        if payload.permissions is not None:
+            role.permissions = await self._permissions(payload.permissions)
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="role.updated",
+            entity_type="role",
+            entity_id=role.id,
+            after={"key": role.key, "rank": role.rank},
+        )
+        await self.db.commit()
+        return self._role_out(role)
+
     async def list_roles(self) -> list[RoleOut]:
         roles = (await self.db.scalars(select(Role).order_by(Role.rank))).all()
-        return [
-            RoleOut(
-                id=role.id,
-                key=role.key,
-                name=role.name,
-                description=role.description,
-                rank=role.rank,
-                is_system=role.is_system,
-                permissions=sorted(p.code for p in role.permissions),
-            )
-            for role in roles
-        ]
+        return [self._role_out(role) for role in roles]
+
+    def _require_role_manager(self, actor: Principal, rank: int) -> None:
+        if not actor.grants.has_anywhere(Perm.ROLE_MANAGE):
+            raise PermissionDenied("Missing permission: role.manage")
+        if rank >= actor.grants.max_rank:
+            raise PermissionDenied("A role must rank below your own")
+
+    async def _permissions(self, codes: list[str]) -> list[Permission]:
+        known = {item.value for item in Perm}
+        unknown = [code for code in codes if code not in known]
+        if unknown:
+            raise Conflict(f"Unknown permission: {unknown[0]}")
+        rows = list(
+            (await self.db.scalars(select(Permission).where(Permission.code.in_(codes)))).all()
+        )
+        if len(rows) != len(set(codes)):
+            raise Conflict("Unknown permission")
+        return rows
+
+    @staticmethod
+    def _role_out(role: Role) -> RoleOut:
+        return RoleOut(
+            id=role.id,
+            key=role.key,
+            name=role.name,
+            description=role.description,
+            rank=role.rank,
+            is_system=role.is_system,
+            permissions=sorted(item.code for item in role.permissions),
+        )
 
     async def _require_manage(
         self,
@@ -317,6 +402,11 @@ class UserService:
     async def register_reader(
         self, email: str, password: str, display_name: str | None, locale: str | None
     ) -> User:
+        from newsroom.settings.service import SettingsService
+
+        settings = await SettingsService(self.db).get()
+        if not settings.registration_enabled:
+            raise PermissionDenied("Registration is closed")
         email = normalize_email(email)
         if await self.users.get_by_email(email) is not None:
             raise EmailTaken(f"{email} is already registered")

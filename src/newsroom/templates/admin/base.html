@@ -5,11 +5,29 @@
   <nav class="flex flex-wrap items-center gap-4 text-sm">
     {% if principal %}
       <a href="/admin/stories/new">{{ _("desk.new") }}</a>
+      {% if principal.grants.has_anywhere(perms.MEDIA_UPLOAD) %}
+        <a href="/admin/media">{{ _("media.nav") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.ARTICLE_PUBLISH) %}
+        <a href="/admin/homepage">{{ _("homepage.nav") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.ARTICLE_CREATE) %}
+        <a href="/admin/authors">{{ _("manage.authors") }}</a>
+      {% endif %}
       {% if principal.grants.has_anywhere(perms.SECTION_MANAGE) %}
         <a href="/admin/sections">{{ _("manage.sections") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.TAG_MANAGE) %}
         <a href="/admin/tags">{{ _("manage.tags") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.LOCALE_MANAGE) %}
+        <a href="/admin/locales">{{ _("manage.locales") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.ROLE_MANAGE) %}
+        <a href="/admin/roles">{{ _("manage.roles") }}</a>
+      {% endif %}
+      {% if principal.grants.has_anywhere(perms.SETTINGS_MANAGE) %}
+        <a href="/admin/settings">{{ _("manage.settings") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.USER_READ) %}
         <a href="/admin/users">{{ _("manage.users") }}</a>

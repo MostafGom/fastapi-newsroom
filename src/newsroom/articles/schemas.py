@@ -102,6 +102,10 @@ class ArticleCreate(Schema):
     content: RevisionContent
 
 
+class LeadImageUpdate(Schema):
+    media_id: uuid.UUID | None = None
+
+
 class ArticleUpdate(Schema):
     lock_version: int
     section_id: uuid.UUID | None = None
@@ -129,6 +133,7 @@ class LocalizationSummaryOut(Schema):
     published_at: UtcDatetime | None
     has_unpublished_changes: bool
     update_requested_at: UtcDatetime | None
+    legal_hold: bool = False
     lock_version: int
 
 
@@ -198,6 +203,10 @@ class RevisionDiffOut(Schema):
     from_revision_id: uuid.UUID
     to_revision_id: uuid.UUID
     fields: list[FieldDiff]
+
+
+class ReasonRequest(Schema):
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class TransitionRequest(Schema):

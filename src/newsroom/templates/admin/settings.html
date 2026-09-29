@@ -1,0 +1,18 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("manage.settings") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold">{{ _("manage.settings") }}</h1>
+<p class="mb-4 text-sm text-muted">{{ _("manage.settings_help") }}</p>
+{% include "admin/partials/notice.html" %}
+<form class="grid max-w-lg gap-3" method="post" action="/admin/settings">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="grid gap-1">{{ _("manage.site_name") }}
+    <input class="border border-line px-2 py-1" name="site_name" required value="{{ current.site_name }}">
+  </label>
+  <label class="flex items-center gap-2">
+    <input type="checkbox" name="registration_enabled" value="1" {% if current.registration_enabled %}checked{% endif %}>
+    {{ _("manage.registration") }}
+  </label>
+  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.save") }}</button>
+</form>
+{% endblock %}

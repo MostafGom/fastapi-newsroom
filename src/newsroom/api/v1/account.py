@@ -6,7 +6,7 @@ from newsroom.articles.schemas import ArticleSummaryOut
 from newsroom.articles.service import ArticleService
 from newsroom.auth.dependencies import CurrentReader, csrf_protect
 from newsroom.core.db import DbSession
-from newsroom.core.i18n import resolve_api_locale
+from newsroom.core.locale_dep import resolve_api_locale
 from newsroom.core.schemas import PROBLEM_RESPONSES
 from newsroom.users.schemas import ReaderProfileOut, ReaderProfileUpdate
 from newsroom.users.service import UserService

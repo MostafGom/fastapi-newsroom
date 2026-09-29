@@ -4,8 +4,6 @@ from enum import StrEnum
 from functools import cache
 from pathlib import Path
 
-from fastapi import Request
-
 from newsroom.core.config import Settings, get_settings
 
 MESSAGES_DIR = Path(__file__).resolve().parent.parent / "messages"
@@ -54,24 +52,22 @@ def negotiate_locale(
     requested: str | None,
     accept_language: str | None,
     settings: Settings | None = None,
+    *,
+    supported: list[str] | None = None,
+    default: str | None = None,
 ) -> str:
     settings = settings or get_settings()
-    supported = settings.supported_locales
-    if requested and requested in supported:
+    codes = supported if supported is not None else settings.supported_locales
+    fallback = default or settings.default_locale
+    if requested and requested in codes:
         return requested
     for tag in parse_accept_language(accept_language or ""):
-        if tag in supported:
+        if tag in codes:
             return tag
         base = tag.split("-", 1)[0]
-        if base in supported:
+        if base in codes:
             return base
-    return settings.default_locale
-
-
-def resolve_api_locale(request: Request) -> str:
-    return negotiate_locale(
-        request.query_params.get("locale"), request.headers.get("accept-language")
-    )
+    return fallback
 
 
 @cache

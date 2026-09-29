@@ -4,6 +4,7 @@
 <header class="flex items-center justify-between border-b border-line bg-card px-6 py-4">
   <a class="text-xl font-bold text-accent no-underline" href="/{{ locale }}/">{{ _("site.title") }}</a>
   <nav class="flex items-center gap-4" aria-label="{{ _('site.languages') }}">
+    <a href="/{{ locale }}/search">{{ _("search.nav") }}</a>
     {% if reader %}
       <a href="/{{ locale }}/account">{{ reader.user.display_name or reader.user.email }}</a>
     {% else %}
@@ -20,6 +21,9 @@
     <ul class="grid gap-4">
       {% for article in articles %}
         <li class="rounded-md border border-line bg-card p-4">
+          {% if labels is defined and labels.get(article.slug) %}
+            <p class="text-sm text-accent">{{ labels.get(article.slug) }}</p>
+          {% endif %}
           <p class="text-sm text-muted">{{ article.section.name }}</p>
           <a class="text-xl font-bold text-ink no-underline" href="/{{ locale }}/article/{{ article.slug }}">{{ article.title }}</a>
           {% if article.excerpt %}<p class="mt-1 text-muted">{{ article.excerpt }}</p>{% endif %}

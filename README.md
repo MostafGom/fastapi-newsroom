@@ -136,16 +136,8 @@ transactions and write audit events in the same transaction as the change.
 
 ## Status
 
-Phase 1 is complete:
-- design docs
-- the full API contract (unimplemented routes return `501`)
-- sessions, CSRF, RBAC with section scopes, audit log, error handling, structured logging
-- the identity/RBAC/audit migration
+Phases 1–3 are in the application: identity and the desk, the public site, search,
+media, homepage curation, the daily briefing, and reader comments.
 
-Next, in order:
-1. staff users and roles
-2. sections and tags
-3. articles, revisions and workflow
-4. scheduler
-5. public site
-6. reader accounts
+Still deliberately out of this version: a comment moderation queue, a paywall, and a
+second search engine for typo tolerance.

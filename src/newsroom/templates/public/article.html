@@ -24,7 +24,43 @@
       <button class="border border-line px-3 py-1" type="submit">{{ _("account.bookmark") if not bookmarked else _("account.saved") }}</button>
     </form>
   {% endif %}
+  {% if article.lead_image_url %}
+    <figure class="mt-6">
+      <img src="{{ article.lead_image_url }}" alt="{{ lead_alt or article.title }}">
+      {% if lead_caption %}<figcaption class="mt-1 text-sm text-muted">{{ lead_caption }}</figcaption>{% endif %}
+    </figure>
+  {% endif %}
   <article class="prose mt-6">{{ article.body_html|safe }}</article>
+  <section class="mt-8">
+    <h2 class="text-xl font-bold">{{ _("comments.heading") }}</h2>
+    {% if comments %}
+      <ul class="mt-4 grid gap-4">
+        {% for comment in comments %}
+          <li class="rounded-md border border-line bg-card p-4">
+            <p class="text-sm text-muted">{{ comment.author_name }}</p>
+            <p>{{ comment.body }}</p>
+            {% if comment.mine %}
+              <form method="post" action="/{{ locale }}/article/{{ article.slug }}/comments/{{ comment.id }}/hide">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="border border-line px-3 py-1" type="submit">{{ _("comments.remove") }}</button>
+              </form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="mt-2 text-muted">{{ _("comments.empty") }}</p>
+    {% endif %}
+    {% if reader %}
+      <form class="mt-4 grid gap-3" method="post" action="/{{ locale }}/article/{{ article.slug }}/comments">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <textarea class="border border-line px-2 py-1" name="body" maxlength="2000" required></textarea>
+        <button class="border border-line px-3 py-1" type="submit">{{ _("comments.submit") }}</button>
+      </form>
+    {% else %}
+      <p class="mt-4"><a href="/{{ locale }}/login">{{ _("comments.sign_in") }}</a></p>
+    {% endif %}
+  </section>
   {% if article.corrections %}
     <aside class="mt-8 border-s-4 border-accent ps-4">
       {% for note in article.corrections %}

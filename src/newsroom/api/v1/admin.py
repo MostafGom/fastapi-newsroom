@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
+from newsroom.articles.authors import AuthorCreate, AuthorOut, AuthorService
 from newsroom.articles.schemas import (
     ArticleAdminOut,
     ArticleCreate,
@@ -13,6 +14,7 @@ from newsroom.articles.schemas import (
     HistoryEntryOut,
     LocalizationCreate,
     LocalizationOut,
+    ReasonRequest,
     RestoreRequest,
     RevisionCreate,
     RevisionDiffOut,
@@ -30,18 +32,23 @@ from newsroom.authz.dependencies import CurrentStaff, require_permission, requir
 from newsroom.authz.permissions import Perm
 from newsroom.core.db import DbSession
 from newsroom.core.schemas import PROBLEM_RESPONSES, Page, PageParams, page_params
+from newsroom.locales.service import LocaleAdminOut, LocaleCreate, LocaleService
+from newsroom.settings.service import SettingsService, SiteSettingsOut, SiteSettingsUpdate
 from newsroom.taxonomy.schemas import (
     SectionAdminOut,
     SectionCreate,
     SectionUpdate,
     TagAdminOut,
     TagCreate,
+    TagMerge,
 )
 from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.models import UserKind, UserStatus
 from newsroom.users.schemas import (
+    RoleCreate,
     RoleGrantCreate,
     RoleOut,
+    RoleUpdate,
     StaffCreate,
     UserOut,
     UserRoleOut,
@@ -231,6 +238,29 @@ async def localization_history(
     return await ArticleService(db).history(staff, localization_id)
 
 
+@router.post("/localizations/{localization_id}/legal-hold", status_code=status.HTTP_204_NO_CONTENT)
+async def set_legal_hold(
+    localization_id: uuid.UUID, payload: ReasonRequest, staff: CurrentStaff, db: DbSession
+) -> None:
+    await ArticleService(db).set_legal_hold(staff, localization_id, payload.reason)
+
+
+@router.post(
+    "/localizations/{localization_id}/legal-hold/clear", status_code=status.HTTP_204_NO_CONTENT
+)
+async def clear_legal_hold(
+    localization_id: uuid.UUID, payload: ReasonRequest, staff: CurrentStaff, db: DbSession
+) -> None:
+    await ArticleService(db).clear_legal_hold(staff, localization_id, payload.reason)
+
+
+@router.post("/localizations/{localization_id}/purge", status_code=status.HTTP_204_NO_CONTENT)
+async def purge_localization(
+    localization_id: uuid.UUID, payload: ReasonRequest, staff: CurrentStaff, db: DbSession
+) -> None:
+    await ArticleService(db).purge(staff, localization_id, payload.reason)
+
+
 @router.post(
     "/localizations/{localization_id}/corrections",
     response_model=CorrectionOut,
@@ -304,6 +334,16 @@ async def list_tags(
 )
 async def create_tag(payload: TagCreate, db: DbSession) -> TagAdminOut:
     return await TaxonomyService(db).create_tag(payload)
+
+
+@router.post(
+    "/tags/merge",
+    response_model=TagAdminOut,
+    dependencies=can(Perm.TAG_MANAGE),
+    tags=["taxonomy"],
+)
+async def merge_tags(payload: TagMerge, staff: CurrentStaff, db: DbSession) -> TagAdminOut:
+    return await TaxonomyService(db).merge_tags(staff, payload.source_id, payload.target_id)
 
 
 # ---- Users and roles ------------------------------------------------------------------------
@@ -382,6 +422,117 @@ async def revoke_role(
 )
 async def list_roles(db: DbSession) -> list[RoleOut]:
     return await UserService(db).list_roles()
+
+
+@router.post(
+    "/roles",
+    response_model=RoleOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=can(Perm.ROLE_MANAGE),
+    tags=["users"],
+)
+async def create_role(payload: RoleCreate, staff: CurrentStaff, db: DbSession) -> RoleOut:
+    return await UserService(db).create_role(staff, payload)
+
+
+@router.patch(
+    "/roles/{role_id}",
+    response_model=RoleOut,
+    dependencies=can(Perm.ROLE_MANAGE),
+    tags=["users"],
+)
+async def update_role(
+    role_id: uuid.UUID, payload: RoleUpdate, staff: CurrentStaff, db: DbSession
+) -> RoleOut:
+    return await UserService(db).update_role(staff, role_id, payload)
+
+
+@router.get("/authors", response_model=list[AuthorOut], tags=["authors"])
+async def list_authors(staff: CurrentStaff, db: DbSession) -> list[AuthorOut]:
+    del staff
+    return await AuthorService(db).list_bylines()
+
+
+@router.post(
+    "/authors",
+    response_model=AuthorOut,
+    status_code=status.HTTP_201_CREATED,
+    tags=["authors"],
+)
+async def create_author(payload: AuthorCreate, staff: CurrentStaff, db: DbSession) -> AuthorOut:
+    return await AuthorService(db).create(staff, payload)
+
+
+@router.delete("/authors/{author_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["authors"])
+async def delete_author(author_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> None:
+    await AuthorService(db).delete(staff, author_id)
+
+
+@router.get(
+    "/locales",
+    response_model=list[LocaleAdminOut],
+    dependencies=can(Perm.LOCALE_MANAGE),
+    tags=["locales"],
+)
+async def list_locales_admin(db: DbSession) -> list[LocaleAdminOut]:
+    return await LocaleService(db).list_all()
+
+
+@router.post(
+    "/locales",
+    response_model=LocaleAdminOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=can(Perm.LOCALE_MANAGE),
+    tags=["locales"],
+)
+async def create_locale(
+    payload: LocaleCreate, staff: CurrentStaff, db: DbSession
+) -> LocaleAdminOut:
+    return await LocaleService(db).create(staff, payload)
+
+
+@router.post(
+    "/locales/{code}/default",
+    response_model=LocaleAdminOut,
+    dependencies=can(Perm.LOCALE_MANAGE),
+    tags=["locales"],
+)
+async def default_locale(code: str, staff: CurrentStaff, db: DbSession) -> LocaleAdminOut:
+    return await LocaleService(db).set_default(staff, code)
+
+
+@router.post(
+    "/locales/{code}/enabled",
+    response_model=LocaleAdminOut,
+    dependencies=can(Perm.LOCALE_MANAGE),
+    tags=["locales"],
+)
+async def set_locale_enabled(
+    code: str, staff: CurrentStaff, db: DbSession, enabled: bool = True
+) -> LocaleAdminOut:
+    return await LocaleService(db).set_enabled(staff, code, enabled)
+
+
+@router.get(
+    "/settings",
+    response_model=SiteSettingsOut,
+    dependencies=can(Perm.SETTINGS_MANAGE),
+    tags=["settings"],
+)
+async def read_settings(db: DbSession) -> SiteSettingsOut:
+    return await SettingsService(db).get()
+
+
+@router.put(
+    "/settings",
+    response_model=SiteSettingsOut,
+    dependencies=can(Perm.SETTINGS_MANAGE),
+    tags=["settings"],
+)
+async def write_settings(
+    payload: SiteSettingsUpdate, staff: CurrentStaff, db: DbSession
+) -> SiteSettingsOut:
+    return await SettingsService(db).update(staff, payload)
 
 
 # ---- Audit ----------------------------------------------------------------------------------

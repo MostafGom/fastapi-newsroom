@@ -1,10 +1,11 @@
 <div class="overflow-hidden rounded-md border border-line bg-card" data-richtext
-     data-dir="{{ editor_dir }}" data-placeholder="{{ _('editor.placeholder') }}">
+     data-dir="{{ editor_dir }}" data-placeholder="{{ _('editor.placeholder') }}"
+     {% if autosave_url is defined %}data-autosave="{{ autosave_url }}"{% endif %}>
   <div class="flex flex-wrap gap-1 border-b border-line bg-paper p-1" role="toolbar" aria-label="{{ _('editor.toolbar') }}">
     {% for cmd, label in [
       ("bold", "B"), ("italic", "I"), ("underline", "U"), ("strike", "S"),
       ("h2", "H2"), ("h3", "H3"), ("bullet", "List"), ("ordered", "1."),
-      ("quote", "Quote"), ("link", "Link"), ("rule", "—")
+      ("quote", "Quote"), ("link", "Link"), ("image", "Image"), ("rule", "—")
     ] %}
       <button type="button" data-cmd="{{ cmd }}"
               class="min-w-8 border border-line bg-card px-2 py-1 text-sm hover:bg-paper">{{ label }}</button>
