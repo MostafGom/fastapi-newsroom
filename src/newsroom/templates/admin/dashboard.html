@@ -3,32 +3,77 @@
 {% block content %}
 <h1 class="text-2xl font-bold">{{ _("admin.dashboard.welcome", name=staff.user.display_name or staff.user.email) }}</h1>
 {% if detail %}<p class="mt-4 text-accent" role="alert">{{ detail }}</p>{% endif %}
-<section class="my-4 rounded-md border border-line bg-card p-5">
-  <div class="mb-3 flex items-center justify-between">
-    <h2 class="font-bold">{{ _("desk.stories") }}</h2>
-    <a href="/admin/stories/new">{{ _("desk.new") }}</a>
-  </div>
-  {% if stories %}
-    <ul class="grid gap-2">
-      {% for story in stories %}
-        <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
-          <a class="font-bold text-ink no-underline" href="/admin/stories/{{ story.localization_id }}">{{ story.title }}</a>
-          <span class="text-sm text-muted">{{ _("locale." ~ story.locale) }} · {{ _("desk.status." ~ story.status) }}</span>
-        </li>
-      {% endfor %}
+<div class="desk-stack mt-6">
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>{{ _("desk.stories") }}</h2>
+        <p class="lede">{{ _("guide.stories") }}</p>
+      </div>
+      <a class="btn-line" href="/admin/stories/new">{{ _("desk.new") }}</a>
+    </div>
+    {% if stories %}
+      <ul class="grid gap-2">
+        {% for story in stories %}
+          <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+            <a class="font-bold text-ink no-underline" href="/admin/stories/{{ story.localization_id }}">{{ story.title }}</a>
+            <span class="text-sm text-muted">{{ _("locale." ~ story.locale) }} · {{ _("desk.status." ~ story.status) }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-muted">{{ _("desk.empty") }}</p>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <h2>{{ _("admin.dashboard.areas") }}</h2>
+    <p class="lede">{{ _("admin.dashboard.areas_help") }}</p>
+    <ul class="area-grid">
+      {% if staff.grants.has_anywhere(perms.ARTICLE_CREATE) %}
+        <li><a href="/admin/stories/new"><strong>{{ _("desk.new") }}</strong><span class="lede">{{ _("guide.new") }}</span></a></li>
+        <li><a href="/admin/authors"><strong>{{ _("manage.authors") }}</strong><span class="lede">{{ _("guide.authors") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.MEDIA_UPLOAD) %}
+        <li><a href="/admin/media"><strong>{{ _("media.nav") }}</strong><span class="lede">{{ _("guide.media") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.ARTICLE_PUBLISH) %}
+        <li><a href="/admin/homepage"><strong>{{ _("homepage.nav") }}</strong><span class="lede">{{ _("guide.homepage") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.SECTION_MANAGE) %}
+        <li><a href="/admin/sections"><strong>{{ _("manage.sections") }}</strong><span class="lede">{{ _("guide.sections") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.TAG_MANAGE) %}
+        <li><a href="/admin/tags"><strong>{{ _("manage.tags") }}</strong><span class="lede">{{ _("guide.tags") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.LOCALE_MANAGE) %}
+        <li><a href="/admin/locales"><strong>{{ _("manage.locales") }}</strong><span class="lede">{{ _("guide.locales") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.ROLE_MANAGE) %}
+        <li><a href="/admin/roles"><strong>{{ _("manage.roles") }}</strong><span class="lede">{{ _("guide.roles") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.SETTINGS_MANAGE) %}
+        <li><a href="/admin/settings"><strong>{{ _("manage.settings") }}</strong><span class="lede">{{ _("guide.settings") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.USER_READ) %}
+        <li><a href="/admin/users"><strong>{{ _("manage.users") }}</strong><span class="lede">{{ _("guide.users") }}</span></a></li>
+      {% endif %}
+      {% if staff.grants.has_anywhere(perms.AUDIT_READ) %}
+        <li><a href="/admin/audit"><strong>{{ _("manage.audit") }}</strong><span class="lede">{{ _("guide.audit") }}</span></a></li>
+      {% endif %}
+      <li><a href="/admin/editor"><strong>{{ _("editor.preview") }}</strong><span class="lede">{{ _("guide.editor") }}</span></a></li>
     </ul>
-  {% else %}
-    <p class="text-muted">{{ _("desk.empty") }}</p>
-  {% endif %}
-</section>
-<section class="my-4 rounded-md border border-line bg-card p-5">
-  <h2 class="font-bold">{{ _("admin.dashboard.roles") }}</h2>
-  <ul class="mt-2 list-disc ps-5">{% for role in roles %}<li>{{ role }}</li>{% else %}<li>{{ _("admin.dashboard.no_roles") }}</li>{% endfor %}</ul>
-</section>
-<section class="my-4 rounded-md border border-line bg-card p-5" x-data="{ show: false }">
-  <h2 class="font-bold">{{ _("admin.dashboard.permissions") }}
-    <button type="button" class="text-accent" @click="show = !show" x-text="show ? '−' : '+'"></button>
-  </h2>
-  <ul class="mt-2 list-disc ps-5" x-show="show" x-cloak dir="ltr">{% for perm in permissions %}<li><code>{{ perm }}</code></li>{% endfor %}</ul>
-</section>
+  </section>
+  <section class="panel">
+    <h2>{{ _("admin.dashboard.roles") }}</h2>
+    <p class="lede">{{ _("guide.yours") }}</p>
+    <ul class="mt-3 list-disc ps-5">{% for role in roles %}<li>{{ role }}</li>{% else %}<li>{{ _("admin.dashboard.no_roles") }}</li>{% endfor %}</ul>
+  </section>
+  <section class="panel" x-data="{ show: false }">
+    <h2>{{ _("admin.dashboard.permissions") }}
+      <button class="btn-quiet" type="button" @click="show = !show" x-text="show ? '−' : '+'"></button>
+    </h2>
+    <p class="lede">{{ _("guide.permissions") }}</p>
+    <ul class="mt-3 list-disc ps-5" x-show="show" x-cloak dir="ltr">{% for perm in permissions %}<li><code>{{ perm }}</code></li>{% endfor %}</ul>
+  </section>
+</div>
 {% endblock %}

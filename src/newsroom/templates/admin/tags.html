@@ -2,27 +2,29 @@
 {% block title %}{{ _("manage.tags") }} · {{ _("admin.title") }}{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold">{{ _("manage.tags") }}</h1>
+<p class="lede">{{ _("guide.tags") }}</p>
 {% include "admin/partials/notice.html" %}
-<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/tags">
+<form class="form panel my-4" method="post" action="/admin/tags">
   <h2 class="font-bold">{{ _("manage.create_tag") }}</h2>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="grid gap-1">{{ _("manage.key") }}
-    <input class="border border-line px-2 py-1" name="key" required dir="ltr" pattern="[a-z0-9_-]+">
+  <label class="field">{{ _("manage.key") }}
+    <input name="key" required dir="ltr" pattern="[a-z0-9_-]+">
   </label>
   {% for code in supported_locales %}
-    <fieldset class="grid gap-1">
+    <fieldset>
       <legend>{{ _("locale." ~ code) }}</legend>
-      <label class="grid gap-1">{{ _("manage.name") }}
-        <input class="border border-line px-2 py-1" name="name_{{ code }}">
+      <label class="field">{{ _("manage.name") }}
+        <input name="name_{{ code }}">
       </label>
-      <label class="grid gap-1">{{ _("manage.slug") }}
-        <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr">
+      <label class="field">{{ _("manage.slug") }}
+        <input name="slug_{{ code }}" dir="ltr">
       </label>
     </fieldset>
   {% endfor %}
-  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.create_tag") }}</button>
+  <button class="btn" type="submit">{{ _("manage.create_tag") }}</button>
 </form>
 {% if tags %}
+<section class="panel">
   <ul class="grid gap-2">
     {% for tag in tags %}
       <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
@@ -36,20 +38,21 @@
   {% if next_cursor %}
     <p class="mt-4"><a href="/admin/tags?cursor={{ next_cursor }}">{{ _("manage.more") }}</a></p>
   {% endif %}
-  <form class="mt-6 flex flex-wrap items-center gap-3" method="post" action="/admin/tags/merge">
+  <form class="form-row mt-6" method="post" action="/admin/tags/merge">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label>{{ _("manage.merge_from") }}
-      <select class="border border-line px-2 py-1" name="source_id" required>
+    <label class="field">{{ _("manage.merge_from") }}
+      <select name="source_id" required>
         {% for tag in tags %}<option value="{{ tag.id }}">{{ tag.key }}</option>{% endfor %}
       </select>
     </label>
-    <label>{{ _("manage.merge_into") }}
-      <select class="border border-line px-2 py-1" name="target_id" required>
+    <label class="field">{{ _("manage.merge_into") }}
+      <select name="target_id" required>
         {% for tag in tags %}<option value="{{ tag.id }}">{{ tag.key }}</option>{% endfor %}
       </select>
     </label>
-    <button class="border border-line px-3 py-1" type="submit">{{ _("manage.merge") }}</button>
+    <button class="btn-line" type="submit">{{ _("manage.merge") }}</button>
   </form>
+</section>
 {% else %}
   <p class="text-muted">{{ _("manage.no_tags") }}</p>
 {% endif %}

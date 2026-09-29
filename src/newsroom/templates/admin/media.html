@@ -1,33 +1,35 @@
 {% extends "admin/base.html" %}
 {% block title %}{{ _("media.heading") }}{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-2xl font-bold">{{ _("media.heading") }}</h1>
-<form class="mb-6 flex flex-wrap items-center gap-3" method="post" action="/admin/media" enctype="multipart/form-data">
+<h1 class="text-2xl font-bold">{{ _("media.heading") }}</h1>
+<p class="lede mb-5">{{ _("guide.media") }}</p>
+<form class="panel form-row mb-5" method="post" action="/admin/media" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp" required>
-  <input class="border border-line px-2 py-1" name="credit" placeholder="{{ _('media.credit') }}">
-  <button class="border border-line px-3 py-1" type="submit">{{ _("media.upload") }}</button>
+  <input name="credit" placeholder="{{ _('media.credit') }}">
+  <button class="btn-line" type="submit">{{ _("media.upload") }}</button>
 </form>
+<section class="panel">
 {% if assets %}
   <ul class="grid gap-4">
     {% for asset in assets %}
-      <li class="rounded-md border border-line bg-card p-4">
+      <li class="border border-line bg-paper p-4">
         <img src="/media/{{ asset.id }}" alt="{{ asset.credit or '' }}">
         <p class="mt-2 text-sm text-muted">{{ asset.mime_type }}{% if asset.credit %} · {{ asset.credit }}{% endif %}</p>
         {% if can_manage %}
           <form class="mt-2" method="post" action="/admin/media/{{ asset.id }}/delete">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="border border-line px-3 py-1" type="submit">{{ _("media.delete") }}</button>
+            <button class="btn-line" type="submit">{{ _("media.delete") }}</button>
           </form>
         {% endif %}
         {% for code in locales %}
-          <form class="mt-3 flex flex-wrap items-center gap-3" method="post" action="/admin/media/{{ asset.id }}/caption">
+          <form class="form-row mt-3" method="post" action="/admin/media/{{ asset.id }}/caption">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="locale" value="{{ code }}">
             <span>{{ code }}</span>
-            <input class="border border-line px-2 py-1" name="caption" placeholder="{{ _('media.caption') }}">
-            <input class="border border-line px-2 py-1" name="alt_text" placeholder="{{ _('media.alt') }}">
-            <button class="border border-line px-3 py-1" type="submit">{{ _("media.saved") }}</button>
+            <input name="caption" placeholder="{{ _('media.caption') }}">
+            <input name="alt_text" placeholder="{{ _('media.alt') }}">
+            <button class="btn-line" type="submit">{{ _("media.saved") }}</button>
           </form>
         {% endfor %}
       </li>
@@ -36,4 +38,5 @@
 {% else %}
   <p class="text-muted">{{ _("media.empty") }}</p>
 {% endif %}
+</section>
 {% endblock %}

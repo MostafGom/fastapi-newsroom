@@ -1,15 +1,15 @@
 <form method="post" action="/admin/login"
-      class="grid gap-3"
+      class="form"
       hx-post="/admin/login" hx-target="this" hx-swap="outerHTML" hx-select="form"
       x-data="{ busy: false }" @submit="busy = true" @htmx:after-request="busy = false">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="next" value="{{ next }}">
   {% if error %}<p class="text-accent" role="alert">{{ _(error) }}</p>{% endif %}
-  <label class="grid gap-1">{{ _("admin.login.email") }}
-    <input class="border border-line px-2 py-1" type="email" name="email" value="{{ email or '' }}" required autocomplete="username" dir="ltr">
+  <label class="field">{{ _("admin.login.email") }}
+    <input type="email" name="email" value="{{ email or '' }}" required autocomplete="username" dir="ltr">
   </label>
-  <label class="grid gap-1">{{ _("admin.login.password") }}
-    <input class="border border-line px-2 py-1" type="password" name="password" required autocomplete="current-password" dir="ltr">
+  <label class="field">{{ _("admin.login.password") }}
+    <input type="password" name="password" required autocomplete="current-password" dir="ltr">
   </label>
-  <button class="bg-ink px-4 py-2 text-paper disabled:opacity-50" type="submit" :disabled="busy">{{ _("admin.login.submit") }}</button>
+  <button class="btn" type="submit" :disabled="busy">{{ _("admin.login.submit") }}</button>
 </form>

@@ -24,57 +24,70 @@
     {% endfor %}
   </nav>
 {% endif %}
-<form class="mb-4 flex flex-wrap items-center gap-3" method="post" action="/admin/stories/{{ story.id }}/lead">
+<section class="panel mb-4">
+  <h2>{{ _("media.lead") }}</h2>
+  <p class="lede mb-3">{{ _("guide.lead") }}</p>
+<form class="form-row" method="post" action="/admin/stories/{{ story.id }}/lead">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="flex items-center gap-2">{{ _("media.lead") }}
-    <select class="border border-line px-2 py-1" name="media_id">
+  <label class="field">{{ _("media.lead") }}
+    <select name="media_id">
       <option value="">{{ _("media.none") }}</option>
       {% for asset in media %}
         <option value="{{ asset.id }}" {% if article.lead_media_id == asset.id %}selected{% endif %}>{{ asset.credit or asset.id }}</option>
       {% endfor %}
     </select>
   </label>
-  <button class="border border-line px-3 py-1" type="submit">{{ _("media.saved") }}</button>
+  <button class="btn-line" type="submit">{{ _("media.saved") }}</button>
 </form>
+</section>
 {% if story.status.value == "published" %}
   <p class="mb-4 text-sm"><a href="/{{ story.locale }}/article/{{ story.slug }}">{{ _("desk.public") }}</a></p>
 {% endif %}
 {% if can_change_slug %}
-  <form class="mb-4 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/slug">
+  <section class="panel mb-4">
+  <h2>{{ _("desk.slug") }}</h2>
+  <p class="lede mb-3">{{ _("guide.slug") }}</p>
+  <form class="form" method="post" action="/admin/stories/{{ story.id }}/slug">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label class="grid gap-1">{{ _("desk.slug") }}
-      <input class="border border-line px-2 py-1" name="slug" required dir="ltr" value="{{ story.slug }}">
+    <label class="field">{{ _("desk.slug") }}
+      <input name="slug" required dir="ltr" value="{{ story.slug }}">
     </label>
-    <button class="border border-line px-4 py-2" type="submit">{{ _("desk.change_slug") }}</button>
+    <button class="btn-line" type="submit">{{ _("desk.change_slug") }}</button>
   </form>
+  </section>
 {% else %}
   <p class="mb-4 text-sm text-muted" dir="ltr">{{ story.slug }}</p>
 {% endif %}
 {% set autosave_url = "/api/v1/admin/localizations/" ~ story.id ~ "/revisions" %}
-<form class="grid gap-3" method="post" action="/admin/stories/{{ story.id }}">
+<section class="panel">
+  <h2>{{ _("editor.title") }}</h2>
+  <p class="lede mb-4">{{ _("guide.edit") }}</p>
+<form class="form form-wide" method="post" action="/admin/stories/{{ story.id }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="base_revision_id" value="{{ story.current_revision.id }}">
   <input type="hidden" name="editor_dir" value="{{ editor_dir }}">
-  <label class="grid gap-1">{{ _("desk.title") }}
-    <input class="border border-line px-2 py-1" name="title" required value="{{ story.current_revision.content.title }}">
+  <label class="field">{{ _("desk.title") }}
+    <input name="title" required value="{{ story.current_revision.content.title }}">
   </label>
-  <label class="grid gap-1">{{ _("desk.subtitle") }}
-    <input class="border border-line px-2 py-1" name="subtitle" value="{{ story.current_revision.content.subtitle or '' }}">
+  <label class="field">{{ _("desk.subtitle") }}
+    <input name="subtitle" value="{{ story.current_revision.content.subtitle or '' }}">
   </label>
-  <label class="grid gap-1">{{ _("desk.excerpt") }}
-    <textarea class="border border-line px-2 py-1" name="excerpt" rows="2">{{ story.current_revision.content.excerpt or '' }}</textarea>
+  <label class="field">{{ _("desk.excerpt") }}
+    <textarea name="excerpt" rows="2">{{ story.current_revision.content.excerpt or '' }}</textarea>
   </label>
   {% include "admin/partials/richtext.html" %}
-  <div class="flex gap-3">
-    <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.save") }}</button>
-    <button class="border border-line px-4 py-2" type="button"
+  <div class="form-actions">
+    <button class="btn" type="submit">{{ _("desk.save") }}</button>
+    <button class="btn-line" type="button"
             hx-post="/admin/editor/preview" hx-target="#preview" hx-swap="innerHTML" hx-include="closest form">{{ _("editor.preview") }}</button>
   </div>
 </form>
 <section id="preview" class="mt-6" aria-live="polite"></section>
+</section>
 {% if comments %}
-<section class="mt-8 rounded-md border border-line bg-card p-5">
-  <h2 class="font-bold">{{ _("comments.heading") }}</h2>
+<section class="panel mt-5">
+  <h2>{{ _("comments.heading") }}</h2>
+  <p class="lede mb-3">{{ _("guide.comments") }}</p>
   <ul class="mt-3 grid gap-3">
     {% for comment in comments %}
       <li>
@@ -83,7 +96,7 @@
         {% if can_hide_comments %}
           <form method="post" action="/admin/stories/{{ story.id }}/comments/{{ comment.id }}/hide">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="border border-line px-3 py-1" type="submit">{{ _("comments.remove") }}</button>
+            <button class="btn-quiet" type="submit">{{ _("comments.remove") }}</button>
           </form>
         {% endif %}
       </li>
@@ -92,8 +105,9 @@
 </section>
 {% endif %}
 {% if story.corrections or can_correct %}
-<section class="mt-8 rounded-md border border-line bg-card p-5">
-  <h2 class="font-bold">{{ _("desk.correction") }}</h2>
+<section class="panel mt-5">
+  <h2>{{ _("desk.correction") }}</h2>
+  <p class="lede mb-3">{{ _("guide.correction") }}</p>
   {% if story.corrections %}
     <ul class="mt-3 grid gap-2">
       {% for note in story.corrections %}
@@ -102,80 +116,82 @@
     </ul>
   {% endif %}
   {% if can_correct %}
-    <form class="mt-3 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/corrections">
+    <form class="form mt-3" method="post" action="/admin/stories/{{ story.id }}/corrections">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label class="grid gap-1">{{ _("desk.correction") }}
-        <select class="border border-line px-2 py-1" name="kind">
+      <label class="field">{{ _("desk.correction") }}
+        <select name="kind">
           {% for kind in correction_kinds %}
             <option value="{{ kind.value }}">{{ _("correction." ~ kind.value) }}</option>
           {% endfor %}
         </select>
       </label>
-      <label class="grid gap-1">{{ _("desk.reason") }}
-        <textarea class="border border-line px-2 py-1" name="text" rows="3" required></textarea>
+      <label class="field">{{ _("desk.reason") }}
+        <textarea name="text" rows="3" required></textarea>
       </label>
-      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.add_correction") }}</button>
+      <button class="btn" type="submit">{{ _("desk.add_correction") }}</button>
     </form>
   {% endif %}
 </section>
 {% endif %}
-<section class="mt-8 rounded-md border border-line bg-card p-5">
-  <h2 class="font-bold">{{ _("desk.actions") }}</h2>
+<section class="panel mt-5">
+  <h2>{{ _("desk.actions") }}</h2>
+  <p class="lede">{{ _("guide.actions") }}</p>
   {% if actions %}
-    <form class="mt-3 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/transition">
+    <form class="form mt-3" method="post" action="/admin/stories/{{ story.id }}/transition">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="lock_version" value="{{ story.lock_version }}">
-      <label class="grid gap-1">{{ _("desk.actions") }}
-        <select class="border border-line px-2 py-1" name="action" required>
+      <label class="field">{{ _("desk.actions") }}
+        <select name="action" required>
           {% for action in actions %}
             <option value="{{ action.value }}">{{ _("desk.action." ~ action.value) }}</option>
           {% endfor %}
         </select>
       </label>
-      <label class="grid gap-1">{{ _("desk.reason") }}
-        <textarea class="border border-line px-2 py-1" name="reason" rows="2"></textarea>
+      <label class="field">{{ _("desk.reason") }}
+        <textarea name="reason" rows="2"></textarea>
       </label>
-      <label class="grid gap-1">{{ _("desk.publish_at") }}
-        <input class="border border-line px-2 py-1" type="datetime-local" name="publish_at">
+      <label class="field">{{ _("desk.publish_at") }}
+        <input type="datetime-local" name="publish_at">
       </label>
-      <label class="grid gap-1">{{ _("desk.takedown_label") }}
-        <select class="border border-line px-2 py-1" name="takedown_reason">
+      <label class="field">{{ _("desk.takedown_label") }}
+        <select name="takedown_reason">
           <option value=""></option>
           {% for reason in takedown_reasons %}
             <option value="{{ reason.value }}">{{ _("desk.takedown." ~ reason.value) }}</option>
           {% endfor %}
         </select>
       </label>
-      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.apply") }}</button>
+      <button class="btn" type="submit">{{ _("desk.apply") }}</button>
     </form>
   {% else %}
     <p class="mt-2 text-muted">{{ _("desk.none_for_you") }}</p>
   {% endif %}
   {% if can_hold or can_clear_hold %}
-    <form class="mt-4 grid max-w-lg gap-3" method="post"
+    <form class="form mt-4" method="post"
           action="/admin/stories/{{ story.id }}/legal-hold{% if can_clear_hold %}/clear{% endif %}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label class="grid gap-1">{{ _("desk.legal_reason") }}
-        <textarea class="border border-line px-2 py-1" name="reason" rows="2" required></textarea>
+      <label class="field">{{ _("desk.legal_reason") }}
+        <textarea name="reason" rows="2" required></textarea>
       </label>
-      <button class="border border-line px-4 py-2" type="submit">
+      <button class="btn-line" type="submit">
         {{ _("desk.clear_hold") if can_clear_hold else _("desk.hold") }}
       </button>
     </form>
   {% endif %}
   {% if can_purge %}
-    <form class="mt-4 grid max-w-lg gap-3" method="post" action="/admin/stories/{{ story.id }}/purge">
+    <form class="form mt-4" method="post" action="/admin/stories/{{ story.id }}/purge">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <p class="text-sm">{{ _("desk.purge_warning") }}</p>
-      <label class="grid gap-1">{{ _("desk.legal_reason") }}
-        <textarea class="border border-line px-2 py-1" name="reason" rows="2" required></textarea>
+      <label class="field">{{ _("desk.legal_reason") }}
+        <textarea name="reason" rows="2" required></textarea>
       </label>
-      <button class="border border-accent px-4 py-2" type="submit">{{ _("desk.purge") }}</button>
+      <button class="btn-danger" type="submit">{{ _("desk.purge") }}</button>
     </form>
   {% endif %}
 </section>
-<section class="mt-8 rounded-md border border-line bg-card p-5">
-  <h2 class="font-bold">{{ _("desk.history") }}</h2>
+<section class="panel mt-5">
+  <h2>{{ _("desk.history") }}</h2>
+  <p class="lede">{{ _("guide.history") }}</p>
   {% if diff %}
     <ul class="mt-3 grid gap-2 text-sm">
       {% for change in diff.fields %}
@@ -218,7 +234,7 @@
             <form method="post" action="/admin/stories/{{ story.id }}/revisions/{{ rev.id }}/restore">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <input type="hidden" name="base_revision_id" value="{{ story.current_revision.id }}">
-              <button type="submit">{{ _("desk.restore") }}</button>
+              <button class="btn-quiet" type="submit">{{ _("desk.restore") }}</button>
             </form>
           {% endif %}
         </span>
@@ -227,31 +243,33 @@
   </ul>
 </section>
 {% if missing_locales %}
-  <section class="mt-8" x-data="{ open: false }">
-    <button type="button" class="font-bold" @click="open = !open">{{ _("desk.translation") }}</button>
-    <form class="mt-3 grid gap-3" method="post" action="/admin/stories/{{ story.article_id }}/localizations" x-show="open" x-cloak>
+  <section class="panel mt-5" x-data="{ open: false }">
+    <h2>{{ _("desk.translation") }}</h2>
+    <p class="lede">{{ _("guide.translation") }}</p>
+    <button class="btn-quiet mt-2" type="button" @click="open = !open">{{ _("desk.add_translation") }}</button>
+    <form class="form mt-3" method="post" action="/admin/stories/{{ story.article_id }}/localizations" x-show="open" x-cloak>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label class="grid gap-1">{{ _("desk.locale") }}
-        <select class="border border-line px-2 py-1" name="locale">
+      <label class="field">{{ _("desk.locale") }}
+        <select name="locale">
           {% for code in missing_locales %}
             <option value="{{ code }}">{{ _("locale." ~ code) }}</option>
           {% endfor %}
         </select>
       </label>
-      <label class="grid gap-1">{{ _("desk.slug") }}
-        <input class="border border-line px-2 py-1" name="slug" required dir="ltr">
+      <label class="field">{{ _("desk.slug") }}
+        <input name="slug" required dir="ltr">
       </label>
-      <label class="grid gap-1">{{ _("desk.title") }}
-        <input class="border border-line px-2 py-1" name="title" required>
+      <label class="field">{{ _("desk.title") }}
+        <input name="title" required>
       </label>
-      <label class="grid gap-1">{{ _("desk.excerpt") }}
-        <textarea class="border border-line px-2 py-1" name="excerpt" rows="2"></textarea>
+      <label class="field">{{ _("desk.excerpt") }}
+        <textarea name="excerpt" rows="2"></textarea>
       </label>
       <div class="overflow-hidden rounded-md border border-line bg-card" data-richtext data-dir="{{ translation_dir }}" data-placeholder="{{ _('editor.placeholder') }}">
         <div data-editor class="min-h-40"></div>
         <textarea class="hidden" name="body">{{ empty_body }}</textarea>
       </div>
-      <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.add_translation") }}</button>
+      <button class="btn" type="submit">{{ _("desk.add_translation") }}</button>
     </form>
   </section>
 {% endif %}

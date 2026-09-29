@@ -10,23 +10,23 @@
       <button class="btn-quiet" type="submit">{{ _("account.logout") }}</button>
     </form>
   </div>
-  <form class="grid max-w-md gap-3 border border-line bg-card p-5" method="post">
+  <form class="form border border-line bg-card p-5" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label class="grid gap-1 font-ui text-sm">{{ _("account.name") }}
+    <label class="field">{{ _("account.name") }}
       <input name="display_name" value="{{ profile.display_name or '' }}">
     </label>
-    <label class="grid gap-1 font-ui text-sm">{{ _("account.locale") }}
+    <label class="field">{{ _("account.locale") }}
       <select name="preferred_locale">
         {% for code in supported_locales %}
           <option value="{{ code }}" {% if profile.preferred_locale == code %}selected{% endif %}>{{ _("locale." ~ code) }}</option>
         {% endfor %}
       </select>
     </label>
-    <label class="flex items-center gap-2 font-ui text-sm">
+    <label class="check">
       <input type="checkbox" name="newsletter_opt_in" value="1" {% if profile.newsletter_opt_in %}checked{% endif %}>
       {{ _("account.newsletter") }}
     </label>
-    <button type="submit">{{ _("account.save") }}</button>
+    <button class="btn" type="submit">{{ _("account.save") }}</button>
   </form>
   <h2 class="mt-10 font-ui text-lg font-semibold">{{ _("account.bookmarks") }}</h2>
   {% if bookmarks %}

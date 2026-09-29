@@ -2,64 +2,82 @@
 {% block title %}{{ _("manage.sections") }} · {{ _("admin.title") }}{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold">{{ _("manage.sections") }}</h1>
+<p class="lede">{{ _("guide.sections") }}</p>
 {% include "admin/partials/notice.html" %}
-<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/sections">
+<form class="form panel my-4" method="post" action="/admin/sections">
   <h2 class="font-bold">{{ _("manage.create_section") }}</h2>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="grid gap-1">{{ _("manage.key") }}
-    <input class="border border-line px-2 py-1" name="key" required dir="ltr" pattern="[a-z0-9_-]+">
+  <label class="field">{{ _("manage.key") }}
+    <input name="key" required dir="ltr" pattern="[a-z0-9_-]+">
   </label>
-  <label class="grid gap-1">{{ _("manage.sort") }}
-    <input class="border border-line px-2 py-1" name="sort_order" type="number" value="0" dir="ltr">
+  <label class="field">{{ _("manage.sort") }}
+    <input name="sort_order" type="number" value="0" dir="ltr">
   </label>
   {% for code in supported_locales %}
-    <fieldset class="grid gap-1">
+    <fieldset>
       <legend>{{ _("locale." ~ code) }}</legend>
-      <label class="grid gap-1">{{ _("manage.name") }}
-        <input class="border border-line px-2 py-1" name="name_{{ code }}">
+      <label class="field">{{ _("manage.name") }}
+        <input name="name_{{ code }}">
       </label>
-      <label class="grid gap-1">{{ _("manage.slug") }}
-        <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr">
+      <label class="field">{{ _("manage.slug") }}
+        <input name="slug_{{ code }}" dir="ltr">
       </label>
-      <label class="grid gap-1">{{ _("manage.description") }}
-        <input class="border border-line px-2 py-1" name="description_{{ code }}">
+      <label class="field">{{ _("manage.description") }}
+        <input name="description_{{ code }}">
       </label>
     </fieldset>
   {% endfor %}
-  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.create_section") }}</button>
+  <button class="btn" type="submit">{{ _("manage.create_section") }}</button>
 </form>
 {% if sections %}
   <ul class="grid gap-3">
     {% for section in sections %}
-      <li class="rounded-md border border-line bg-card p-5">
-        <form class="grid gap-3" method="post" action="/admin/sections/{{ section.id }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <div class="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 class="font-bold" dir="ltr">{{ section.key }}</h2>
-            {% if section.parent_key %}<span class="text-sm text-muted" dir="ltr">{{ section.parent_key }}</span>{% endif %}
+      <li class="panel" x-data="{ open: false }">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h2 dir="ltr">{{ section.key }}</h2>
+            <p class="lede">
+              {%- set ns = namespace(shown=false) -%}
+              {%- for code in supported_locales -%}
+                {%- if section.locales[code].name -%}
+                  {%- if ns.shown %} · {% endif -%}
+                  {{- section.locales[code].name -}}
+                  {%- set ns.shown = true -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if section.parent_key %} · {{ section.parent_key }}{% endif -%}
+              {%- if not section.is_active %} · {{ _("manage.disabled") }}{% endif -%}
+            </p>
           </div>
-          <label class="grid gap-1">{{ _("manage.sort") }}
-            <input class="border border-line px-2 py-1" name="sort_order" type="number" value="{{ section.sort_order }}" dir="ltr">
+          <button class="btn-line" type="button" @click="open = !open" :aria-expanded="open">
+            <span x-show="!open">{{ _("manage.edit") }}</span>
+            <span x-show="open" x-cloak>{{ _("manage.close") }}</span>
+          </button>
+        </div>
+        <form class="form mt-4" method="post" action="/admin/sections/{{ section.id }}" x-show="open" x-cloak>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label class="field">{{ _("manage.sort") }}
+            <input name="sort_order" type="number" value="{{ section.sort_order }}" dir="ltr">
           </label>
-          <label class="flex items-center gap-2">
+          <label class="check">
             <input type="checkbox" name="is_active" value="1" {% if section.is_active %}checked{% endif %}>
             {{ _("manage.active") }}
           </label>
           {% for code in supported_locales %}
-            <fieldset class="grid gap-1">
+            <fieldset>
               <legend>{{ _("locale." ~ code) }}</legend>
-              <label class="grid gap-1">{{ _("manage.name") }}
-                <input class="border border-line px-2 py-1" name="name_{{ code }}" value="{{ section.locales[code].name }}">
+              <label class="field">{{ _("manage.name") }}
+                <input name="name_{{ code }}" value="{{ section.locales[code].name }}">
               </label>
-              <label class="grid gap-1">{{ _("manage.slug") }}
-                <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr" value="{{ section.locales[code].slug }}">
+              <label class="field">{{ _("manage.slug") }}
+                <input name="slug_{{ code }}" dir="ltr" value="{{ section.locales[code].slug }}">
               </label>
-              <label class="grid gap-1">{{ _("manage.description") }}
-                <input class="border border-line px-2 py-1" name="description_{{ code }}" value="{{ section.locales[code].description }}">
+              <label class="field">{{ _("manage.description") }}
+                <input name="description_{{ code }}" value="{{ section.locales[code].description }}">
               </label>
             </fieldset>
           {% endfor %}
-          <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.save") }}</button>
+          <button class="btn" type="submit">{{ _("manage.save") }}</button>
         </form>
       </li>
     {% endfor %}
