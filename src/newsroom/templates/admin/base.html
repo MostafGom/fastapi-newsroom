@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% block body_class %}desk{% endblock %}
 {% block body %}
-<header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-card px-6 py-4" x-data="{ open: false }">
-  <a class="text-xl font-bold text-accent no-underline" href="/admin/">{{ _("admin.title") }}</a>
+<header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-card px-6 py-3" x-data="{ open: false }">
+  <a class="font-ui text-lg font-semibold text-ink no-underline" href="/admin/">{{ _("admin.title") }}</a>
   <nav class="flex flex-wrap items-center gap-4 text-sm">
     {% if principal %}
       <a href="/admin/stories/new">{{ _("desk.new") }}</a>
@@ -43,7 +44,7 @@
       <div class="absolute end-0 z-10 mt-1 border border-line bg-card p-2" x-show="open" x-cloak @click.outside="open = false">
         <form method="post" action="/admin/logout">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit">{{ _("admin.logout") }}</button>
+          <button class="btn-quiet" type="submit">{{ _("admin.logout") }}</button>
         </form>
       </div>
     </div>

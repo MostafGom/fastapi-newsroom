@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,42 @@ from newsroom.core.i18n import locale_info, translate
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
 STATIC_DIR = PACKAGE_DIR / "static"
+
+_MONTHS_EN = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+_MONTHS_AR = (
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+)
+
+
+def format_date(value: datetime | date | None, locale: str) -> str:
+    if value is None:
+        return ""
+    names = _MONTHS_AR if locale.split("-", 1)[0] == "ar" else _MONTHS_EN
+    return f"{value.day} {names[value.month - 1]} {value.year}"
 
 
 def _request_locale(request: Request) -> str:
@@ -41,6 +78,9 @@ def _context(request: Request) -> dict[str, Any]:
         "supported_locales": enabled,
         "locale_names": getattr(request.state, "locale_names", {}) or {},
         "registration_open": getattr(request.state, "registration_open", True),
+        "nav_sections": getattr(request.state, "nav_sections", []),
+        "edition_date": datetime.now(UTC).date(),
+        "format_date": format_date,
         "csrf_token": ensure_csrf_token(request),
         "principal": getattr(request.state, "principal", None),
         "perms": Perm,
