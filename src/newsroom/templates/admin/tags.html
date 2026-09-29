@@ -1,0 +1,42 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("manage.tags") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold">{{ _("manage.tags") }}</h1>
+{% include "admin/partials/notice.html" %}
+<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/tags">
+  <h2 class="font-bold">{{ _("manage.create_tag") }}</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="grid gap-1">{{ _("manage.key") }}
+    <input class="border border-line px-2 py-1" name="key" required dir="ltr" pattern="[a-z0-9_-]+">
+  </label>
+  {% for code in supported_locales %}
+    <fieldset class="grid gap-1">
+      <legend>{{ _("locale." ~ code) }}</legend>
+      <label class="grid gap-1">{{ _("manage.name") }}
+        <input class="border border-line px-2 py-1" name="name_{{ code }}">
+      </label>
+      <label class="grid gap-1">{{ _("manage.slug") }}
+        <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr">
+      </label>
+    </fieldset>
+  {% endfor %}
+  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.create_tag") }}</button>
+</form>
+{% if tags %}
+  <ul class="grid gap-2">
+    {% for tag in tags %}
+      <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+        <span class="font-bold" dir="ltr">{{ tag.key }}</span>
+        <span class="text-sm text-muted">
+          {% for code in supported_locales %}{% if tag.locales[code].name %}{{ tag.locales[code].name }}{% if not loop.last %} · {% endif %}{% endif %}{% endfor %}
+        </span>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if next_cursor %}
+    <p class="mt-4"><a href="/admin/tags?cursor={{ next_cursor }}">{{ _("manage.more") }}</a></p>
+  {% endif %}
+{% else %}
+  <p class="text-muted">{{ _("manage.no_tags") }}</p>
+{% endif %}
+{% endblock %}

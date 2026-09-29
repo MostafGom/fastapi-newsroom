@@ -1,0 +1,52 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("manage.users") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold">{{ _("manage.users") }}</h1>
+{% include "admin/partials/notice.html" %}
+<nav class="my-4 flex gap-3 text-sm" aria-label="{{ _('manage.kind') }}">
+  <a href="/admin/users" {% if not kind_value %}class="font-bold" aria-current="page"{% endif %}>{{ _("manage.all") }}</a>
+  <a href="/admin/users?kind=staff" {% if kind_value == "staff" %}class="font-bold" aria-current="page"{% endif %}>{{ _("manage.kind.staff") }}</a>
+  <a href="/admin/users?kind=reader" {% if kind_value == "reader" %}class="font-bold" aria-current="page"{% endif %}>{{ _("manage.kind.reader") }}</a>
+</nav>
+<form class="mb-4 flex flex-wrap items-baseline gap-3" method="get" action="/admin/users">
+  {% if kind_value %}<input type="hidden" name="kind" value="{{ kind_value }}">{% endif %}
+  <label class="grid gap-1">{{ _("manage.email") }}
+    <input class="border border-line px-2 py-1" name="q" value="{{ query }}" dir="ltr">
+  </label>
+  <button class="border border-line px-4 py-2" type="submit">{{ _("manage.filter") }}</button>
+</form>
+{% if can_manage %}
+<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/users">
+  <h2 class="font-bold">{{ _("manage.create_user") }}</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="grid gap-1">{{ _("manage.email") }}
+    <input class="border border-line px-2 py-1" type="email" name="email" required dir="ltr">
+  </label>
+  <label class="grid gap-1">{{ _("manage.name") }}
+    <input class="border border-line px-2 py-1" name="display_name" required>
+  </label>
+  <label class="grid gap-1">{{ _("manage.job_title") }}
+    <input class="border border-line px-2 py-1" name="job_title">
+  </label>
+  <label class="grid gap-1">{{ _("manage.password") }}
+    <input class="border border-line px-2 py-1" type="password" name="password" required minlength="12" dir="ltr" autocomplete="new-password">
+  </label>
+  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.create_user") }}</button>
+</form>
+{% endif %}
+{% if users %}
+  <ul class="grid gap-2">
+    {% for account in users %}
+      <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+        <a class="font-bold text-ink no-underline" dir="ltr" href="/admin/users/{{ account.id }}">{{ account.email }}</a>
+        <span class="text-sm text-muted">{{ account.display_name or "" }} · {{ _("manage.kind." ~ account.kind.value) }} · {{ _("manage.status." ~ account.status.value) }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if next_cursor %}
+    <p class="mt-4"><a href="/admin/users?cursor={{ next_cursor }}{% if kind_value %}&amp;kind={{ kind_value }}{% endif %}{% if query %}&amp;q={{ query }}{% endif %}">{{ _("manage.more") }}</a></p>
+  {% endif %}
+{% else %}
+  <p class="text-muted">{{ _("manage.no_users") }}</p>
+{% endif %}
+{% endblock %}

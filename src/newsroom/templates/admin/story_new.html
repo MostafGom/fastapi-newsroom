@@ -1,0 +1,69 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("desk.new") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<div class="mb-4 flex items-center justify-between gap-4">
+  <h1 class="text-2xl font-bold">{{ _("desk.new") }}</h1>
+  <nav class="flex gap-3 text-sm" aria-label="{{ _('desk.locale') }}">
+    <a href="/admin/stories/new?locale=ar" {% if chosen_locale == "ar" %}class="font-bold" aria-current="page"{% endif %}>{{ _("locale.ar") }}</a>
+    <a href="/admin/stories/new?locale=en" {% if chosen_locale == "en" %}class="font-bold" aria-current="page"{% endif %}>{{ _("locale.en") }}</a>
+  </nav>
+</div>
+{% if error %}<p class="mb-4 text-accent" role="alert">{{ error }}</p>{% endif %}
+{% if not sections %}
+  <p class="text-muted">{{ _("desk.no_sections") }}</p>
+{% else %}
+<form class="grid gap-3" method="post" action="/admin/stories/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="locale" value="{{ chosen_locale }}">
+  <input type="hidden" name="editor_dir" value="{{ editor_dir }}">
+  <label class="grid gap-1">{{ _("desk.section") }}
+    <select class="border border-line px-2 py-1" name="section_id" required>
+      {% for section in sections %}
+        <option value="{{ section.id }}" {% if form.section_id == section.id|string %}selected{% endif %}>{{ section.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="grid gap-1">{{ _("desk.type") }}
+    <select class="border border-line px-2 py-1" name="article_type">
+      {% for kind in article_types %}
+        <option value="{{ kind.value }}" {% if form.article_type == kind.value %}selected{% endif %}>{{ _("desk.type." ~ kind.value) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="grid gap-1">{{ _("desk.slug") }}
+    <input class="border border-line px-2 py-1" name="slug" required dir="ltr" value="{{ form.slug or '' }}">
+  </label>
+  <label class="grid gap-1">{{ _("desk.title") }}
+    <input class="border border-line px-2 py-1" name="title" required value="{{ form.title or '' }}">
+  </label>
+  <label class="grid gap-1">{{ _("desk.subtitle") }}
+    <input class="border border-line px-2 py-1" name="subtitle" value="{{ form.subtitle or '' }}">
+  </label>
+  <label class="grid gap-1">{{ _("desk.excerpt") }}
+    <textarea class="border border-line px-2 py-1" name="excerpt" rows="2">{{ form.excerpt or '' }}</textarea>
+  </label>
+  {% if tags %}
+    <fieldset class="grid gap-1">
+      <legend>{{ _("desk.tags") }}</legend>
+      {% for tag in tags %}
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="tag_ids" value="{{ tag.id }}" {% if form.tag_ids and tag.id|string in form.tag_ids %}checked{% endif %}>
+          {{ tag.label }}
+        </label>
+      {% endfor %}
+    </fieldset>
+  {% endif %}
+  <label class="flex items-center gap-2">
+    <input type="checkbox" name="is_breaking" value="1" {% if form.is_breaking %}checked{% endif %}>
+    {{ _("desk.breaking") }}
+  </label>
+  {% include "admin/partials/richtext.html" %}
+  <div class="flex gap-3">
+    <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("desk.create") }}</button>
+    <button class="border border-line px-4 py-2" type="button"
+            hx-post="/admin/editor/preview" hx-target="#preview" hx-swap="innerHTML" hx-include="closest form">{{ _("editor.preview") }}</button>
+  </div>
+</form>
+<section id="preview" class="mt-6" aria-live="polite"></section>
+{% endif %}
+{% endblock %}

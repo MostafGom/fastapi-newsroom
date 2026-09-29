@@ -1,0 +1,23 @@
+{
+  "name": "newsroom-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@tiptap/core": "^3.6.2",
+    "@tiptap/extension-image": "^3.6.2",
+    "@tiptap/extension-link": "^3.6.2",
+    "@tiptap/extension-placeholder": "^3.6.2",
+    "@tiptap/extension-underline": "^3.6.2",
+    "@tiptap/pm": "^3.6.2",
+    "@tiptap/starter-kit": "^3.6.2",
+    "alpinejs": "^3.14.9",
+    "htmx.org": "^2.0.7",
+    "tailwindcss": "^4.1.13",
+    "vite": "^7.1.7"
+  }
+}

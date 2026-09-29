@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@source "../../src/newsroom/templates";
+@source "./**/*.js";
+
+@theme {
+  --font-sans: system-ui, "Segoe UI", "Noto Naskh Arabic", "Noto Sans Arabic", sans-serif;
+  --color-ink: #1a1a1a;
+  --color-paper: #fafaf7;
+  --color-card: #ffffff;
+  --color-line: #e3e3de;
+  --color-accent: #9b1c1c;
+  --color-muted: #6b6b6b;
+}
+
+[x-cloak] {
+  display: none !important;
+}
+
+.ProseMirror {
+  min-height: 16rem;
+  outline: none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted);
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-block: 1rem 0.5rem;
+}
+.ProseMirror h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-block: 0.75rem 0.25rem;
+}
+.ProseMirror p,
+.ProseMirror ul,
+.ProseMirror ol,
+.ProseMirror blockquote {
+  margin-block: 0.5rem;
+}
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-inline-start: 1.25rem;
+}
+.ProseMirror blockquote {
+  border-inline-start: 3px solid var(--color-line);
+  padding-inline-start: 0.75rem;
+  color: var(--color-muted);
+}
+.ProseMirror a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}

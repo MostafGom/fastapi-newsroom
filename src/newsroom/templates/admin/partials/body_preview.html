@@ -1,0 +1,7 @@
+{% if error %}
+<p class="text-accent" role="alert">{{ error }}</p>
+{% else %}
+<article class="rounded-md border border-line bg-card p-5" dir="{{ editor_dir }}">
+  {{ html|safe }}
+</article>
+{% endif %}

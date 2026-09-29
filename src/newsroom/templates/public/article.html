@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }} · {{ _("site.title") }}{% endblock %}
+{% block body %}
+<header class="flex items-center justify-between border-b border-line bg-card px-6 py-4">
+  <a class="text-xl font-bold text-accent no-underline" href="/{{ locale }}/">{{ _("site.title") }}</a>
+  <a href="/{{ locale }}/section/{{ article.section.slug }}">{{ article.section.name }}</a>
+</header>
+<main class="mx-auto max-w-3xl px-6 py-8">
+  <h1 class="text-3xl font-bold">{{ article.title }}</h1>
+  {% if article.subtitle %}<p class="mt-2 text-xl text-muted">{{ article.subtitle }}</p>{% endif %}
+  <p class="mt-3 text-sm text-muted">{{ _("article.by") }}
+    {% for byline in article.bylines %}{{ byline.display_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% if article.tags %}
+    <ul class="mt-4 flex flex-wrap gap-3 text-sm">
+      {% for tag in article.tags %}
+        <li><a href="/{{ locale }}/tag/{{ tag.slug }}">{{ tag.name }}</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if reader %}
+    <form class="mt-4" method="post" action="/{{ locale }}/article/{{ article.slug }}/bookmark">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="border border-line px-3 py-1" type="submit">{{ _("account.bookmark") if not bookmarked else _("account.saved") }}</button>
+    </form>
+  {% endif %}
+  <article class="prose mt-6">{{ article.body_html|safe }}</article>
+  {% if article.corrections %}
+    <aside class="mt-8 border-s-4 border-accent ps-4">
+      {% for note in article.corrections %}
+        <p><strong>{{ _("correction." ~ note.kind.value) }}.</strong> {{ note.text }}</p>
+      {% endfor %}
+    </aside>
+  {% endif %}
+</main>
+{% endblock %}

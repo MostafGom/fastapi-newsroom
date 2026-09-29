@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("manage.sections") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold">{{ _("manage.sections") }}</h1>
+{% include "admin/partials/notice.html" %}
+<form class="my-4 grid gap-3 rounded-md border border-line bg-card p-5" method="post" action="/admin/sections">
+  <h2 class="font-bold">{{ _("manage.create_section") }}</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="grid gap-1">{{ _("manage.key") }}
+    <input class="border border-line px-2 py-1" name="key" required dir="ltr" pattern="[a-z0-9_-]+">
+  </label>
+  <label class="grid gap-1">{{ _("manage.sort") }}
+    <input class="border border-line px-2 py-1" name="sort_order" type="number" value="0" dir="ltr">
+  </label>
+  {% for code in supported_locales %}
+    <fieldset class="grid gap-1">
+      <legend>{{ _("locale." ~ code) }}</legend>
+      <label class="grid gap-1">{{ _("manage.name") }}
+        <input class="border border-line px-2 py-1" name="name_{{ code }}">
+      </label>
+      <label class="grid gap-1">{{ _("manage.slug") }}
+        <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr">
+      </label>
+      <label class="grid gap-1">{{ _("manage.description") }}
+        <input class="border border-line px-2 py-1" name="description_{{ code }}">
+      </label>
+    </fieldset>
+  {% endfor %}
+  <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.create_section") }}</button>
+</form>
+{% if sections %}
+  <ul class="grid gap-3">
+    {% for section in sections %}
+      <li class="rounded-md border border-line bg-card p-5">
+        <form class="grid gap-3" method="post" action="/admin/sections/{{ section.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 class="font-bold" dir="ltr">{{ section.key }}</h2>
+            {% if section.parent_key %}<span class="text-sm text-muted" dir="ltr">{{ section.parent_key }}</span>{% endif %}
+          </div>
+          <label class="grid gap-1">{{ _("manage.sort") }}
+            <input class="border border-line px-2 py-1" name="sort_order" type="number" value="{{ section.sort_order }}" dir="ltr">
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="is_active" value="1" {% if section.is_active %}checked{% endif %}>
+            {{ _("manage.active") }}
+          </label>
+          {% for code in supported_locales %}
+            <fieldset class="grid gap-1">
+              <legend>{{ _("locale." ~ code) }}</legend>
+              <label class="grid gap-1">{{ _("manage.name") }}
+                <input class="border border-line px-2 py-1" name="name_{{ code }}" value="{{ section.locales[code].name }}">
+              </label>
+              <label class="grid gap-1">{{ _("manage.slug") }}
+                <input class="border border-line px-2 py-1" name="slug_{{ code }}" dir="ltr" value="{{ section.locales[code].slug }}">
+              </label>
+              <label class="grid gap-1">{{ _("manage.description") }}
+                <input class="border border-line px-2 py-1" name="description_{{ code }}" value="{{ section.locales[code].description }}">
+              </label>
+            </fieldset>
+          {% endfor %}
+          <button class="bg-ink px-4 py-2 text-paper" type="submit">{{ _("manage.save") }}</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">{{ _("manage.no_sections") }}</p>
+{% endif %}
+{% endblock %}
