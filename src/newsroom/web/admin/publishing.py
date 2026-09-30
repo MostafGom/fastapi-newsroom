@@ -60,7 +60,9 @@ async def upload_media(
 ) -> RedirectResponse:
     _require(staff, Perm.MEDIA_UPLOAD)
     try:
-        await MediaService(db).upload(staff, await file.read(), credit=credit)
+        await MediaService(db).upload(
+            staff, await file.read(), credit=credit, filename=file.filename
+        )
     except AppError:
         return RedirectResponse("/admin/media?notice=error", status_code=303)
     return RedirectResponse("/admin/media?notice=saved", status_code=303)
@@ -81,6 +83,22 @@ async def caption_media(
         asset_id,
         MediaTranslationIn(locale=locale, caption=caption or None, alt_text=alt_text or None),
     )
+    return RedirectResponse("/admin/media?notice=saved", status_code=303)
+
+
+@router.post("/media/{asset_id}/name")
+async def rename_media(
+    asset_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    filename: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    _require(staff, Perm.MEDIA_UPLOAD)
+    try:
+        await MediaService(db).rename(staff, asset_id, filename)
+    except AppError as exc:
+        detail = quote(exc.detail or "Could not rename")
+        return RedirectResponse(f"/admin/media?notice=error&detail={detail}", status_code=303)
     return RedirectResponse("/admin/media?notice=saved", status_code=303)
 
 

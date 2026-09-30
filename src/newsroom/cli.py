@@ -17,6 +17,7 @@ from newsroom.core.db import create_engine, create_sessionmaker
 from newsroom.core.errors import AppError
 from newsroom.locales.seed import seed_locales
 from newsroom.seed.demo import seed_demo
+from newsroom.seed.volume import seed_volume
 from newsroom.users.repository import UserRepository
 from newsroom.users.service import UserService
 
@@ -51,6 +52,8 @@ def seed() -> None:
         if result.removed_permissions:
             typer.echo(f"removed stale permissions: {', '.join(result.removed_permissions)}")
         for line in await seed_demo(db):
+            typer.echo(line)
+        for line in await seed_volume(db):
             typer.echo(line)
 
     run_with_db(job)

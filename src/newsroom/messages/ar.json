@@ -265,5 +265,9 @@
   "author.kind.contributor": "مساهم",
   "author.kind.agency": "وكالة",
   "media.delete": "حذف",
+  "media.filename": "الاسم",
+  "media.rename": "تغيير الاسم",
+  "media.unnamed": "بلا اسم",
+  "media.open": "عرض الصورة كاملة",
   "account.registration_closed": "التسجيل مغلق."
 }

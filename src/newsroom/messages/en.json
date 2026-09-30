@@ -265,5 +265,9 @@
   "author.kind.contributor": "Contributor",
   "author.kind.agency": "Agency",
   "media.delete": "Delete",
+  "media.filename": "Name",
+  "media.rename": "Rename",
+  "media.unnamed": "Untitled",
+  "media.open": "View the full image",
   "account.registration_closed": "Registration is closed."
 }

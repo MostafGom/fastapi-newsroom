@@ -59,11 +59,15 @@ editorial dashboard for staff, served by one FastAPI application that exposes bo
 
 ## Phase plan
 
+Phases 1–3 are implemented. [AGENTS.md](../AGENTS.md) is the working agreement for anyone continuing the code: how to run it, what is unfinished, and the rules for security and tests.
+
 | Phase | Content |
 |---|---|
-| 1 (this phase) | Design docs, API contract (stubbed routes), scaffold, cross-cutting concerns, identity/RBAC/audit migration. |
-| 2 | Vertical slices: staff auth and user management → sections/tags → articles, revisions, workflow → scheduler → public site → reader accounts. |
+| 1 | Design docs, API contract, scaffold, cross-cutting concerns, identity/RBAC/audit. |
+| 2 | Staff auth and user management, sections and tags, articles, revisions, workflow, scheduler, public site, reader accounts. |
 | 3 | Search (own service; see [ADR 0009](adr/0009-search-service.md)), media pipeline, homepage curation, newsletters, comments. |
+
+Next work, not started: finish cursor pagination on the lists that still stop after the first page, then add desk search that can see drafts. Public search stays published-only.
 
 ## Explicitly out of scope for v1 (revisit later)
 - Paywall and payment processing.

@@ -12,7 +12,7 @@ from newsroom.core.db import DbSession
 from newsroom.core.schemas import PROBLEM_RESPONSES
 from newsroom.homepage.schemas import HomepageUpdate
 from newsroom.homepage.service import HomepageService
-from newsroom.media.schemas import MediaOut, MediaTranslationIn
+from newsroom.media.schemas import MediaNameIn, MediaOut, MediaTranslationIn
 from newsroom.media.service import MediaService
 
 router = APIRouter(
@@ -34,7 +34,9 @@ async def upload_media(
     file: Annotated[UploadFile, File()],
     credit: Annotated[str | None, Form()] = None,
 ) -> MediaOut:
-    return await MediaService(db).upload(staff, await file.read(), credit=credit)
+    return await MediaService(db).upload(
+        staff, await file.read(), credit=credit, filename=file.filename
+    )
 
 
 @router.put(
@@ -46,6 +48,13 @@ async def caption_media(
     asset_id: uuid.UUID, payload: MediaTranslationIn, staff: CurrentStaff, db: DbSession
 ) -> MediaOut:
     return await MediaService(db).set_translation(staff, asset_id, payload)
+
+
+@router.put("/media/{asset_id}/name", response_model=MediaOut, dependencies=can(Perm.MEDIA_UPLOAD))
+async def rename_media(
+    asset_id: uuid.UUID, payload: MediaNameIn, staff: CurrentStaff, db: DbSession
+) -> MediaOut:
+    return await MediaService(db).rename(staff, asset_id, payload.filename)
 
 
 @router.delete("/media/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
