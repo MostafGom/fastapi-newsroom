@@ -32,7 +32,14 @@ class MediaService:
         self.db = db
         self.settings = settings or get_settings()
 
-    async def upload(self, actor: Principal, data: bytes, *, credit: str | None) -> MediaOut:
+    async def upload(
+        self,
+        actor: Principal,
+        data: bytes,
+        *,
+        credit: str | None,
+        filename: str | None = None,
+    ) -> MediaOut:
         if not actor.grants.has_anywhere(Perm.MEDIA_UPLOAD):
             raise PermissionDenied("Missing permission: media.upload")
         if len(data) > _MAX_BYTES:
@@ -52,6 +59,7 @@ class MediaService:
             width=width,
             height=height,
             byte_size=len(data),
+            filename=_filename(filename),
             credit=credit.strip() if credit else None,
             uploaded_by=actor.user.id,
             created_at=utcnow(),
@@ -64,7 +72,7 @@ class MediaService:
             action="media.uploaded",
             entity_type="media_asset",
             entity_id=asset.id,
-            after={"mime_type": mime, "byte_size": len(data)},
+            after={"mime_type": mime, "byte_size": len(data), "filename": asset.filename},
         )
         await self.db.commit()
         return MediaOut.model_validate(asset, from_attributes=True)
@@ -92,6 +100,27 @@ class MediaService:
             entity_type="media_asset",
             entity_id=asset.id,
             after={"locale": payload.locale},
+        )
+        await self.db.commit()
+        return MediaOut.model_validate(asset, from_attributes=True)
+
+    async def rename(self, actor: Principal, asset_id: uuid.UUID, filename: str) -> MediaOut:
+        if not actor.grants.has_anywhere(Perm.MEDIA_MANAGE) and not actor.grants.has_anywhere(
+            Perm.MEDIA_UPLOAD
+        ):
+            raise PermissionDenied("Missing permission: media.upload")
+        cleaned = _filename(filename)
+        if cleaned is None:
+            raise Conflict("Image name is empty")
+        asset = await self._get(asset_id)
+        asset.filename = cleaned
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="media.renamed",
+            entity_type="media_asset",
+            entity_id=asset.id,
+            after={"filename": cleaned},
         )
         await self.db.commit()
         return MediaOut.model_validate(asset, from_attributes=True)
@@ -184,6 +213,18 @@ class MediaService:
         if path.parent != root:
             raise NotFound("Media not found")
         return path
+
+
+def _filename(raw: str | None) -> str | None:
+    """Keep the name a person typed. The file on disk stays the asset id."""
+    if raw is None:
+        return None
+    name = raw.replace("\\", "/").rsplit("/", 1)[-1]
+    name = "".join(ch for ch in name if ch.isprintable() and ord(ch) >= 32)
+    name = name.strip().strip(".")
+    if not name or name in {".", ".."}:
+        return None
+    return name[:200]
 
 
 def _write_display(path: Path, data: bytes) -> None:

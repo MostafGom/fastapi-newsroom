@@ -3,6 +3,8 @@
 Multilingual news publishing platform with a public site for readers, an editorial dashboard
 for staff, and a JSON API, all served by one FastAPI application.
 
+Agents continuing this work should read [AGENTS.md](AGENTS.md) first, then `docs/`.
+
 - **Backend**: FastAPI, SQLAlchemy 2 (async) + asyncpg, Alembic, Pydantic v2
 - **Frontend**: Jinja templates + HTMX (server interaction) + Alpine.js (local UI state)
 - **Database**: PostgreSQL 18
@@ -89,7 +91,7 @@ and can be revoked immediately.
 | `demo-writer@example.com` | Writer |
 | `demo-reader@example.com` | Reader: profile and bookmarks |
 
-The same command publishes one story in Arabic and English, leaves one story in review, and schedules one to publish six hours later. Running it again does not duplicate accounts or stories. An existing super admin such as `admin@example.com` is left unchanged.
+The same command publishes one fixture story in Arabic and English, leaves one story in review, and schedules one to publish six hours later. It then publishes about 100 original demo briefs (Arabic and English) across five desks so the dev lists are long enough to page. Those briefs are not copied from another publication. Running the command again does not duplicate accounts or stories. Tests call only the three fixtures, not the extra briefs. An existing super admin such as `admin@example.com` is left unchanged. Staff accounts sign in at `/admin/login`. The reader account signs in at `/ar/login` or `/en/login`.
 
 ### Database role (one-time)
 
@@ -139,5 +141,10 @@ transactions and write audit events in the same transaction as the change.
 Phases 1–3 are in the application: identity and the desk, the public site, search,
 media, homepage curation, the daily briefing, and reader comments.
 
-Still deliberately out of this version: a comment moderation queue, a paywall, and a
-second search engine for typo tolerance.
+Cursor pagination is real for reader search and for desk accounts, tags, and the audit
+log. The reader home, section, and tag pages, and the desk story, media, and homepage
+lists, still stop after the first page. Desk search is not built. The public search
+index covers published stories only.
+
+Still deliberately out of this version: a comment moderation queue, a paywall, staff
+two-factor authentication, and a second search engine for typo tolerance.

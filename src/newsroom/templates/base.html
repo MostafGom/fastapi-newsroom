@@ -7,8 +7,8 @@
   <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"4..","swap":true,"error":false},{"code":"...","swap":false,"error":true}]}'>
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='dist/app.css') }}">
-  <script type="module" src="{{ url_for('static', path='dist/app.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='dist/app.css') }}?v={{ asset_version }}">
+  <script type="module" src="{{ url_for('static', path='dist/app.js') }}?v={{ asset_version }}"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="m-0 bg-paper font-ui text-ink {% block body_class %}site{% endblock %}">

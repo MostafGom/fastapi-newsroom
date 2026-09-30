@@ -44,6 +44,14 @@ _MONTHS_AR = (
 )
 
 
+def _asset_version() -> str:
+    css = STATIC_DIR / "dist" / "app.css"
+    try:
+        return str(int(css.stat().st_mtime))
+    except OSError:
+        return "0"
+
+
 def format_date(value: datetime | date | None, locale: str) -> str:
     if value is None:
         return ""
@@ -85,6 +93,7 @@ def _context(request: Request) -> dict[str, Any]:
         "principal": getattr(request.state, "principal", None),
         "perms": Perm,
         "is_htmx": request.headers.get("hx-request") == "true",
+        "asset_version": _asset_version(),
         "_": lambda key, **params: translate(locale, key, **params),
     }
 

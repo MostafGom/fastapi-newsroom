@@ -33,7 +33,7 @@
     <select name="media_id">
       <option value="">{{ _("media.none") }}</option>
       {% for asset in media %}
-        <option value="{{ asset.id }}" {% if article.lead_media_id == asset.id %}selected{% endif %}>{{ asset.credit or asset.id }}</option>
+        <option value="{{ asset.id }}" {% if article.lead_media_id == asset.id %}selected{% endif %}>{{ asset.filename or asset.credit or asset.id }}</option>
       {% endfor %}
     </select>
   </label>

@@ -1,5 +1,7 @@
 import uuid
 
+from pydantic import Field
+
 from newsroom.core.schemas import Schema, UtcDatetime
 
 
@@ -15,8 +17,13 @@ class MediaTranslationOut(Schema):
     alt_text: str | None
 
 
+class MediaNameIn(Schema):
+    filename: str = Field(min_length=1, max_length=200)
+
+
 class MediaOut(Schema):
     id: uuid.UUID
+    filename: str | None
     mime_type: str
     width: int | None
     height: int | None

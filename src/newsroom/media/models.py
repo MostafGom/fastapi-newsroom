@@ -16,6 +16,7 @@ class MediaAsset(UUIDPrimaryKey, Base):
     width: Mapped[int | None]
     height: Mapped[int | None]
     byte_size: Mapped[int]
+    filename: Mapped[str | None] = mapped_column(String(200))
     credit: Mapped[str | None] = mapped_column(String(200))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
