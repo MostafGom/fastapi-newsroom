@@ -39,7 +39,6 @@ from newsroom.comments.service import CommentService
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
-from newsroom.media.service import MediaService
 from newsroom.taxonomy.schemas import SectionAdminOut, TagAdminOut
 from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.service import UserService
@@ -566,7 +565,6 @@ async def _edit_context(
         and story.status is not ArticleStatus.ARCHIVED
         and staff.grants.has(Perm.ARTICLE_CORRECT, section_id=article.section_id),
         "correction_kinds": list(CorrectionKind),
-        "media": await MediaService(db).list_recent(),
         "comments": await CommentService(db).list_public(localization_id, None),
         "can_hide_comments": staff.grants.has(Perm.ARTICLE_EDIT, section_id=article.section_id),
     }

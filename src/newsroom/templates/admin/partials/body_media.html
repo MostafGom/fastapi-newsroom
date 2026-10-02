@@ -1,0 +1,16 @@
+<dialog id="body-media" class="media-picker-dialog">
+  <form method="dialog">
+    <button class="btn-line" type="submit">{{ _("manage.close") }}</button>
+  </form>
+  <p class="lede mb-3">{{ _("media.pick") }}</p>
+  <label class="field">{{ _("media.filename") }}
+    <input id="body-media-query" name="q" maxlength="200"
+           hx-get="/admin/media/picker"
+           hx-target="#body-media-choices"
+           hx-trigger="keyup changed delay:300ms"
+           hx-include="#body-media-query, #body-media-locale, #body-media-mode">
+  </label>
+  <input id="body-media-locale" type="hidden" name="locale" value="{{ editor_locale|default('', true) }}">
+  <input id="body-media-mode" type="hidden" name="mode" value="body">
+  <div id="body-media-choices" class="mt-3"></div>
+</dialog>

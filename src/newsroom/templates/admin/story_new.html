@@ -71,6 +71,7 @@
     <input type="checkbox" name="is_breaking" value="1" {% if form.is_breaking %}checked{% endif %}>
     {{ _("desk.breaking") }}
   </label>
+  {% set editor_locale = chosen_locale %}
   {% include "admin/partials/richtext.html" %}
   <div class="form-actions">
     <button class="btn" type="submit">{{ _("desk.create") }}</button>
@@ -79,5 +80,7 @@
   </div>
 </form>
 <section id="preview" class="mt-6" aria-live="polite"></section>
+{% set editor_locale = chosen_locale %}
+{% include "admin/partials/body_media.html" %}
 {% endif %}
 {% endblock %}

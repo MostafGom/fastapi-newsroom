@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import String, cast, select, tuple_
+from sqlalchemy import String, cast, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
@@ -106,6 +106,18 @@ class MediaService:
         return MediaOut.model_validate(asset, from_attributes=True)
 
     async def rename(self, actor: Principal, asset_id: uuid.UUID, filename: str) -> MediaOut:
+        return await self.update(actor, asset_id, filename=filename, credit=None, keep_credit=True)
+
+    async def update(
+        self,
+        actor: Principal,
+        asset_id: uuid.UUID,
+        *,
+        filename: str,
+        credit: str | None,
+        keep_credit: bool = False,
+    ) -> MediaOut:
+        """Change the display name. The desk form also sets the credit; the name API leaves it."""
         if not actor.grants.has_anywhere(Perm.MEDIA_MANAGE) and not actor.grants.has_anywhere(
             Perm.MEDIA_UPLOAD
         ):
@@ -115,13 +127,15 @@ class MediaService:
             raise Conflict("Image name is empty")
         asset = await self._get(asset_id)
         asset.filename = cleaned
+        if not keep_credit:
+            asset.credit = _blank(credit)
         record_event(
             self.db,
             actor_id=actor.user.id,
             action="media.renamed",
             entity_type="media_asset",
             entity_id=asset.id,
-            after={"filename": cleaned},
+            after={"filename": cleaned, "credit": asset.credit},
         )
         await self.db.commit()
         return MediaOut.model_validate(asset, from_attributes=True)
@@ -174,8 +188,11 @@ class MediaService:
         )
         return used is not None
 
-    async def list_page(self, paging: PageParams) -> Page[MediaOut]:
+    async def list_page(self, paging: PageParams, *, query: str | None = None) -> Page[MediaOut]:
         stmt = select(MediaAsset).order_by(MediaAsset.created_at.desc(), MediaAsset.id.desc())
+        term = (query or "").strip()
+        if term:
+            stmt = stmt.where(MediaAsset.filename.ilike(_like(term), escape="\\"))
         if paging.cursor:
             created_at, row_id = decode_keyset(paging.cursor, "created_at")
             stmt = stmt.where(
@@ -194,9 +211,35 @@ class MediaService:
             next_cursor=next_cursor,
         )
 
-    async def list_recent(self) -> list[MediaOut]:
-        page = await self.list_page(PageParams(limit=40, cursor=None))
-        return page.items
+    async def used_ids(self, asset_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+        """Lead images and body images on this page. An unused id can be deleted."""
+        if not asset_ids:
+            return set()
+        from newsroom.articles.models import Article, ArticleRevision
+
+        leads = {
+            item
+            for item in (
+                await self.db.scalars(
+                    select(Article.lead_media_id).where(Article.lead_media_id.in_(asset_ids))
+                )
+            ).all()
+            if item is not None
+        }
+        needles = [f"/media/{asset_id}" for asset_id in asset_ids]
+        bodies = (
+            await self.db.scalars(
+                select(cast(ArticleRevision.body, String)).where(
+                    or_(
+                        *(cast(ArticleRevision.body, String).contains(needle) for needle in needles)
+                    )
+                )
+            )
+        ).all()
+        blob = "\n".join(bodies)
+        return leads | {
+            asset_id for asset_id, needle in zip(asset_ids, needles, strict=True) if needle in blob
+        }
 
     async def file(self, asset_id: uuid.UUID, *, original: bool = False) -> tuple[Path, str]:
         asset = await self.db.get(MediaAsset, asset_id)
@@ -230,6 +273,11 @@ class MediaService:
         if path.parent != root:
             raise NotFound("Media not found")
         return path
+
+
+def _like(term: str) -> str:
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 def _filename(raw: str | None) -> str | None:

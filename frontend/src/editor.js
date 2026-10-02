@@ -49,7 +49,54 @@ async function autosave(host, editor) {
   if (input && saved.id) input.value = saved.id;
 }
 
-function run(editor, command) {
+function bindLibrary(dialog) {
+  if (dialog.dataset.bound === "1") return;
+  dialog.dataset.bound = "1";
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) {
+      dialog.close();
+      return;
+    }
+    const pick = event.target.closest("[data-pick]");
+    if (!pick || pick.disabled) return;
+    const alt = (pick.dataset.alt || "").trim();
+    if (!alt) return;
+    dialog.dataset.src = `/media/${pick.dataset.pick}`;
+    dialog.dataset.alt = alt;
+    dialog.close("chosen");
+  });
+}
+
+function openLibrary(editor, host) {
+  const dialog = document.getElementById("body-media");
+  if (!dialog || typeof dialog.showModal !== "function") return;
+  bindLibrary(dialog);
+  const locale = host.dataset.locale || "";
+  const localeInput = dialog.querySelector("#body-media-locale");
+  if (localeInput) localeInput.value = locale;
+  const query = dialog.querySelector("#body-media-query");
+  if (query) query.value = "";
+  const choices = dialog.querySelector("#body-media-choices");
+  if (choices && window.htmx) {
+    window.htmx.ajax("GET", "/admin/media/picker", {
+      target: choices,
+      swap: "innerHTML",
+      values: { mode: "body", locale, q: "" },
+    });
+  }
+  const onClose = () => {
+    dialog.removeEventListener("close", onClose);
+    if (dialog.returnValue !== "chosen") return;
+    const src = dialog.dataset.src || "";
+    const alt = (dialog.dataset.alt || "").trim();
+    if (!src || !alt) return;
+    editor.chain().focus().setImage({ src, alt }).run();
+  };
+  dialog.addEventListener("close", onClose);
+  dialog.showModal();
+}
+
+function run(editor, command, host) {
   const chain = editor.chain().focus();
   const commands = {
     bold: () => chain.toggleBold().run(),
@@ -69,13 +116,7 @@ function run(editor, command) {
       if (href === "") chain.unsetLink().run();
       else chain.setLink({ href }).run();
     },
-    image: () => {
-      const src = window.prompt("Media URL", "/media/");
-      if (!src) return;
-      const alt = window.prompt("Alt text", "");
-      if (!alt || !alt.trim()) return;
-      chain.setImage({ src: src.trim(), alt: alt.trim() }).run();
-    },
+    image: () => openLibrary(editor, host),
   };
   commands[command]?.();
 }
@@ -123,7 +164,7 @@ export function mountEditors(root = document) {
     host.querySelectorAll("[data-cmd]").forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
-        run(editor, button.dataset.cmd);
+        run(editor, button.dataset.cmd, host);
       });
     });
   });

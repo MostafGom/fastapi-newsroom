@@ -1,0 +1,25 @@
+{% if assets %}
+  <ul class="media-choices">
+    {% for asset in assets %}
+      {% set alt = namespace(text="") %}
+      {% for item in asset.translations if item.locale == picker_locale and item.alt_text %}
+        {% set alt.text = item.alt_text %}
+      {% endfor %}
+      <li>
+        <button type="button" class="media-pick" data-pick="{{ asset.id }}" data-alt="{{ alt.text }}"
+                {% if mode == "body" and not alt.text %}disabled{% endif %}>
+          <img src="/media/{{ asset.id }}" alt="">
+          <span class="meta">{{ asset.filename or _("media.unnamed") }}</span>
+          {% if mode == "body" and not alt.text %}
+            <span class="meta">{{ _("media.need_alt") }}</span>
+          {% endif %}
+        </button>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if more %}<p class="meta mt-3">{{ _("media.more_in_library") }}</p>{% endif %}
+{% elif query %}
+  <p class="text-muted">{{ _("media.no_match") }}</p>
+{% else %}
+  <p class="text-muted">{{ _("media.empty") }}</p>
+{% endif %}
