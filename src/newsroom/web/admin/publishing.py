@@ -2,7 +2,7 @@
 
 import uuid
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,10 +18,11 @@ from newsroom.authz.permissions import Perm
 from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
+from newsroom.core.schemas import PageParams
 from newsroom.homepage.service import HomepageService
 from newsroom.media.schemas import MediaTranslationIn
 from newsroom.media.service import MediaService
-from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
+from newsroom.web.paging import MAX_PAGE, PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
 
 _PAGE = 40
@@ -36,6 +37,47 @@ def _require(staff: Principal, perm: Perm) -> None:
         raise PermissionDenied(f"Missing permission: {perm.value}")
 
 
+def _media_back(*, notice: str, q: str, page: int, detail: str | None = None) -> str:
+    params: dict[str, str] = {"notice": notice}
+    cleaned = q.strip()
+    if cleaned:
+        params["q"] = cleaned
+    if page > 1:
+        params["page"] = str(min(page, MAX_PAGE))
+    if detail:
+        params["detail"] = detail
+    return "/admin/media?" + urlencode(params)
+
+
+@router.get("/media/picker", response_class=HTMLResponse)
+async def media_picker(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    q: Annotated[str, Query(max_length=200)] = "",
+    mode: Annotated[str, Query()] = "lead",
+    locale: Annotated[str, Query(max_length=16)] = "",
+) -> HTMLResponse:
+    """Thumbnails a story can choose. Body images need alt text in that language."""
+    _require(staff, Perm.MEDIA_UPLOAD)
+    settings = get_settings()
+    term = q.strip()
+    code = locale if locale in settings.supported_locales else settings.default_locale
+    found = await MediaService(db).list_page(PageParams(limit=12, cursor=None), query=term or None)
+    return templates.TemplateResponse(
+        request,
+        "admin/partials/media_picker.html",
+        {
+            "staff": staff,
+            "assets": found.items,
+            "query": term,
+            "mode": "body" if mode == "body" else "lead",
+            "picker_locale": code,
+            "more": found.next_cursor is not None,
+        },
+    )
+
+
 @router.get("/media", response_class=HTMLResponse)
 async def media_page(
     request: Request,
@@ -43,23 +85,34 @@ async def media_page(
     db: DbSession,
     page: PageQuery = 1,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
+    q: Annotated[str, Query(max_length=200)] = "",
+    notice: Annotated[str | None, Query(max_length=32)] = None,
+    detail: Annotated[str | None, Query(max_length=300)] = None,
 ) -> HTMLResponse:
     _require(staff, Perm.MEDIA_UPLOAD)
+    term = q.strip()
     fragment = is_fragment(request, cursor)
-    found = await MediaService(db).list_page(listing_params(_PAGE, page, fragment, cursor))
+    service = MediaService(db)
+    found = await service.list_page(
+        listing_params(_PAGE, page, fragment, cursor), query=term or None
+    )
     return templates.TemplateResponse(
         request,
         "admin/fragments/media.html" if fragment else "admin/media.html",
         {
             "staff": staff,
             "assets": found.items,
+            "query": term,
+            "in_use": await service.used_ids([item.id for item in found.items]),
             "locales": getattr(request.state, "enabled_locales", None)
             or get_settings().supported_locales,
             "can_manage": staff.grants.has_anywhere(Perm.MEDIA_MANAGE),
+            "notice": notice if notice in {"saved", "error"} else None,
+            "detail": detail,
             **pager_context(
                 path="/admin/media",
                 page=page,
-                extra=None,
+                extra={"q": term},
                 next_cursor=found.next_cursor,
                 fragment=fragment,
                 prev_key="manage.previous",
@@ -81,9 +134,11 @@ async def upload_media(
         await MediaService(db).upload(
             staff, await file.read(), credit=credit, filename=file.filename
         )
-    except AppError:
-        return RedirectResponse("/admin/media?notice=error", status_code=303)
-    return RedirectResponse("/admin/media?notice=saved", status_code=303)
+    except AppError as exc:
+        return RedirectResponse(
+            _media_back(notice="error", q="", page=1, detail=exc.detail), status_code=303
+        )
+    return RedirectResponse(_media_back(notice="saved", q="", page=1), status_code=303)
 
 
 @router.post("/media/{asset_id}/caption")
@@ -94,14 +149,21 @@ async def caption_media(
     locale: Annotated[str, Form()],
     caption: Annotated[str, Form()] = "",
     alt_text: Annotated[str, Form()] = "",
+    q: Annotated[str, Form()] = "",
+    page: Annotated[int, Form()] = 1,
 ) -> RedirectResponse:
     _require(staff, Perm.MEDIA_UPLOAD)
-    await MediaService(db).set_translation(
-        staff,
-        asset_id,
-        MediaTranslationIn(locale=locale, caption=caption or None, alt_text=alt_text or None),
-    )
-    return RedirectResponse("/admin/media?notice=saved", status_code=303)
+    try:
+        await MediaService(db).set_translation(
+            staff,
+            asset_id,
+            MediaTranslationIn(locale=locale, caption=caption or None, alt_text=alt_text or None),
+        )
+    except AppError as exc:
+        return RedirectResponse(
+            _media_back(notice="error", q=q, page=page, detail=exc.detail), status_code=303
+        )
+    return RedirectResponse(_media_back(notice="saved", q=q, page=page), status_code=303)
 
 
 @router.post("/media/{asset_id}/name")
@@ -110,25 +172,36 @@ async def rename_media(
     staff: CurrentStaff,
     db: DbSession,
     filename: Annotated[str, Form()] = "",
+    credit: Annotated[str, Form()] = "",
+    q: Annotated[str, Form()] = "",
+    page: Annotated[int, Form()] = 1,
 ) -> RedirectResponse:
     _require(staff, Perm.MEDIA_UPLOAD)
     try:
-        await MediaService(db).rename(staff, asset_id, filename)
+        await MediaService(db).update(staff, asset_id, filename=filename, credit=credit)
     except AppError as exc:
-        detail = quote(exc.detail or "Could not rename")
-        return RedirectResponse(f"/admin/media?notice=error&detail={detail}", status_code=303)
-    return RedirectResponse("/admin/media?notice=saved", status_code=303)
+        return RedirectResponse(
+            _media_back(notice="error", q=q, page=page, detail=exc.detail), status_code=303
+        )
+    return RedirectResponse(_media_back(notice="saved", q=q, page=page), status_code=303)
 
 
 @router.post("/media/{asset_id}/delete")
-async def delete_media(asset_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> RedirectResponse:
+async def delete_media(
+    asset_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    q: Annotated[str, Form()] = "",
+    page: Annotated[int, Form()] = 1,
+) -> RedirectResponse:
     _require(staff, Perm.MEDIA_MANAGE)
     try:
         await MediaService(db).delete(staff, asset_id)
     except AppError as exc:
-        detail = quote(exc.detail or "Could not delete")
-        return RedirectResponse(f"/admin/media?notice=error&detail={detail}", status_code=303)
-    return RedirectResponse("/admin/media?notice=saved", status_code=303)
+        return RedirectResponse(
+            _media_back(notice="error", q=q, page=page, detail=exc.detail), status_code=303
+        )
+    return RedirectResponse(_media_back(notice="saved", q=q, page=page), status_code=303)
 
 
 @router.get("/homepage", response_class=HTMLResponse)

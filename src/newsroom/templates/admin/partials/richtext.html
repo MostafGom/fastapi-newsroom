@@ -1,5 +1,6 @@
 <div class="overflow-hidden rounded-md border border-line bg-card" data-richtext
-     data-dir="{{ editor_dir }}" data-placeholder="{{ _('editor.placeholder') }}"
+     data-dir="{{ editor_dir }}" data-locale="{{ editor_locale|default('', true) }}"
+     data-placeholder="{{ _('editor.placeholder') }}"
      {% if autosave_url is defined %}data-autosave="{{ autosave_url }}"{% endif %}>
   <div class="flex flex-wrap gap-1 border-b border-line bg-paper p-1" role="toolbar" aria-label="{{ _('editor.toolbar') }}">
     {% for cmd, label in [

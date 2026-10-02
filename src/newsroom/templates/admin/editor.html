@@ -14,8 +14,11 @@
 <form class="form form-wide panel" hx-post="/admin/editor/preview" hx-target="#preview" hx-swap="innerHTML">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="editor_dir" value="{{ editor_dir }}">
+  {% set editor_locale = "ar" if editor_dir == "rtl" else "en" %}
   {% include "admin/partials/richtext.html" %}
   <button class="btn mt-3" type="submit">{{ _("editor.preview") }}</button>
 </form>
 <section id="preview" class="mt-6" aria-live="polite"></section>
+{% set editor_locale = "ar" if editor_dir == "rtl" else "en" %}
+{% include "admin/partials/body_media.html" %}
 {% endblock %}

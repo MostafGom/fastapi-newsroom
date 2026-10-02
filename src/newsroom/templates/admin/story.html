@@ -24,21 +24,30 @@
     {% endfor %}
   </nav>
 {% endif %}
-<section class="panel mb-4">
+<section class="panel mb-4" x-data="{ id: '{{ article.lead_media_id or '' }}' }"
+         @click="const pick = $event.target.closest('[data-pick]'); if (!pick || pick.disabled) return; id = pick.dataset.pick; $el.querySelectorAll('.is-selected').forEach((el) => el.classList.remove('is-selected')); pick.classList.add('is-selected')">
   <h2>{{ _("media.lead") }}</h2>
   <p class="lede mb-3">{{ _("guide.lead") }}</p>
-<form class="form-row" method="post" action="/admin/stories/{{ story.id }}/lead">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="field">{{ _("media.lead") }}
-    <select name="media_id">
-      <option value="">{{ _("media.none") }}</option>
-      {% for asset in media %}
-        <option value="{{ asset.id }}" {% if article.lead_media_id == asset.id %}selected{% endif %}>{{ asset.filename or asset.credit or asset.id }}</option>
-      {% endfor %}
-    </select>
+  <form method="post" action="/admin/stories/{{ story.id }}/lead">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="media_id" value="{{ article.lead_media_id or '' }}" :value="id">
+    <img class="lead-preview mb-3" x-cloak x-show="id" :src="id ? '/media/' + id : ''" alt="">
+    <button class="btn-quiet" type="button" @click="id = ''" x-cloak x-show="id">{{ _("media.none") }}</button>
+    <div class="form-actions">
+      <button class="btn-line" type="submit">{{ _("media.save") }}</button>
+    </div>
+  </form>
+  <label class="field mt-3">{{ _("media.filename") }}
+    <input id="lead-query" name="q" maxlength="200"
+           hx-get="/admin/media/picker"
+           hx-target="#lead-choices"
+           hx-trigger="keyup changed delay:300ms"
+           hx-include="#lead-query"
+           hx-vals='{"mode": "lead", "locale": "{{ story.locale }}"}'>
   </label>
-  <button class="btn-line" type="submit">{{ _("media.saved") }}</button>
-</form>
+  <div id="lead-choices" class="mt-3"
+       hx-get="/admin/media/picker?mode=lead&amp;locale={{ story.locale }}"
+       hx-trigger="load"></div>
 </section>
 {% if story.status.value == "published" %}
   <p class="mb-4 text-sm"><a href="/{{ story.locale }}/article/{{ story.slug }}">{{ _("desk.public") }}</a></p>
@@ -75,6 +84,7 @@
   <label class="field">{{ _("desk.excerpt") }}
     <textarea name="excerpt" rows="2">{{ story.current_revision.content.excerpt or '' }}</textarea>
   </label>
+  {% set editor_locale = story.locale %}
   {% include "admin/partials/richtext.html" %}
   <div class="form-actions">
     <button class="btn" type="submit">{{ _("desk.save") }}</button>
@@ -276,4 +286,6 @@
     </form>
   </section>
 {% endif %}
+{% set editor_locale = story.locale %}
+{% include "admin/partials/body_media.html" %}
 {% endblock %}

@@ -1,79 +1,70 @@
 {% extends "admin/base.html" %}
 {% block title %}{{ _("media.heading") }}{% endblock %}
-{% block head %}
-<style>
-  .media-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    align-items: start;
-    gap: 0.9rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  @media (max-width: 960px) {
-    .media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  }
-  @media (max-width: 640px) {
-    .media-grid { grid-template-columns: minmax(0, 1fr) !important; }
-  }
-  .media-open {
-    display: block;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: zoom-in;
-  }
-  .media-card img,
-  .media-open img {
-    display: block;
-    width: 100%;
-    aspect-ratio: 3 / 2;
-    object-fit: cover;
-  }
-  .form fieldset.media-locale {
-    display: grid;
-    gap: 0.65rem;
-    margin: 0;
-    border: 1px solid var(--color-line);
-    border-block-start: 3px solid var(--color-ink);
-    padding: 0.65rem 0.7rem 0.75rem;
-    background: var(--color-card);
-  }
-  .form fieldset.media-locale[dir="ltr"] {
-    border-block-start-color: var(--color-muted);
-  }
-  .media-view {
-    width: min(70rem, calc(100vw - 2.5rem));
-    max-height: calc(100vh - 2.5rem);
-    padding: 0.75rem;
-    border: 1px solid var(--color-ink);
-    background: var(--color-paper);
-  }
-  .media-view::backdrop {
-    background: rgb(28 25 23 / 72%);
-  }
-  .media-view img {
-    display: block;
-    width: auto;
-    max-width: 100%;
-    max-height: calc(100vh - 6.5rem);
-    margin: 0.75rem auto 0;
-    object-fit: contain;
-    aspect-ratio: auto;
-  }
-</style>
-{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold">{{ _("media.heading") }}</h1>
 <p class="lede mb-5">{{ _("guide.media") }}</p>
-<form class="panel form-row mb-5" method="post" action="/admin/media" enctype="multipart/form-data">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <input type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp" required>
-  <input name="credit" placeholder="{{ _('media.credit') }}">
-  <button class="btn-line" type="submit">{{ _("media.upload") }}</button>
+{% include "admin/partials/notice.html" %}
+<form class="form-row mb-4" method="get" action="/admin/media">
+  <label class="field">{{ _("media.filename") }}
+    <input name="q" value="{{ query }}" maxlength="200">
+  </label>
+  <button class="btn-line" type="submit">{{ _("manage.filter") }}</button>
+</form>
+<form class="panel mb-5" method="post" action="/admin/media" enctype="multipart/form-data"
+      x-data="{
+        preview: '',
+        sending: false,
+        controller: null,
+        choose(event) {
+          if (event.target.type !== 'file') return;
+          if (this.preview) URL.revokeObjectURL(this.preview);
+          const file = event.target.files && event.target.files[0];
+          this.preview = file && file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+        },
+        discard() {
+          if (this.preview) URL.revokeObjectURL(this.preview);
+          this.preview = '';
+          this.$refs.file.value = '';
+        },
+        halt() {
+          if (this.controller) this.controller.abort();
+        },
+        async send() {
+          if (this.sending) return;
+          const body = new FormData(this.$el);
+          this.sending = true;
+          this.controller = new AbortController();
+          try {
+            const response = await fetch(this.$el.action, {
+              method: 'POST',
+              body,
+              signal: this.controller.signal,
+              credentials: 'same-origin',
+            });
+            window.location.assign(response.url);
+          } catch (error) {
+            this.sending = false;
+            this.controller = null;
+            if (error.name !== 'AbortError') window.location.assign(this.$el.action + '?notice=error');
+          }
+        },
+      }"
+      @change="choose($event)"
+      @submit.prevent="send()">
+  <template x-if="preview">
+    <img class="upload-preview mb-3" :src="preview" alt="{{ _('media.preview') }}">
+  </template>
+  <div class="form-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input x-ref="file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp" required :disabled="sending">
+    <input name="credit" placeholder="{{ _('media.credit') }}" maxlength="200" :disabled="sending">
+    <button class="btn-line" type="submit" :disabled="sending">{{ _("media.upload") }}</button>
+    <button class="btn-quiet" type="button" x-show="preview || sending" x-cloak
+            @click="sending ? halt() : discard()">
+      <span x-show="!sending">{{ _("media.cancel") }}</span>
+      <span x-show="sending" x-cloak>{{ _("media.stop") }}</span>
+    </button>
+  </div>
 </form>
 <section class="panel" x-data="{ full: '' }"
          @click="const opener = $event.target.closest('[data-full]'); if (opener) { full = opener.dataset.full; $refs.shot.showModal() }">
@@ -84,6 +75,8 @@
     </ul>
     {% include "partials/pager.html" %}
   </div>
+{% elif query %}
+  <p class="text-muted">{{ _("media.no_match") }}</p>
 {% else %}
   <p class="text-muted">{{ _("media.empty") }}</p>
 {% endif %}

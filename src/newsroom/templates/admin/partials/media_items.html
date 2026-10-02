@@ -1,43 +1,62 @@
 {% for asset in assets %}
 <li class="media-card">
-  <button class="media-open" type="button" data-full="/media/{{ asset.id }}/original" aria-label="{{ _('media.open') }}">
-    <img src="/media/{{ asset.id }}" alt="{{ asset.credit or '' }}">
-  </button>
-  <p class="meta">{{ asset.filename or _("media.unnamed") }} · {{ asset.mime_type }}{% if asset.credit %} · {{ asset.credit }}{% endif %}</p>
-  <form class="form" method="post" action="/admin/media/{{ asset.id }}/name">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label class="field">{{ _("media.filename") }}
-      <input name="filename" required maxlength="200" value="{{ asset.filename or '' }}">
-    </label>
-    <button class="btn-line" type="submit">{{ _("media.rename") }}</button>
-  </form>
-  {% for code in locales %}
-    {% set writing = "rtl" if code.split("-")[0] in ["ar", "fa", "he", "ur"] else "ltr" %}
-    {% set current = namespace(caption="", alt="") %}
-    {% for item in asset.translations if item.locale == code %}
-      {% set current.caption = item.caption or "" %}
-      {% set current.alt = item.alt_text or "" %}
-    {% endfor %}
-    <form class="form" method="post" action="/admin/media/{{ asset.id }}/caption">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <input type="hidden" name="locale" value="{{ code }}">
-      <fieldset class="media-locale" dir="{{ writing }}">
-        <legend>{{ _("locale." ~ code) }}</legend>
-        <label class="field">{{ _("media.caption") }}
-          <input name="caption" value="{{ current.caption }}">
-        </label>
-        <label class="field">{{ _("media.alt") }}
-          <input name="alt_text" value="{{ current.alt }}">
-        </label>
-        <button class="btn-line" type="submit">{{ _("media.saved") }}</button>
-      </fieldset>
-    </form>
+  {% set thumb_alt = namespace(text="") %}
+  {% for item in asset.translations if item.locale == locale and item.alt_text %}
+    {% set thumb_alt.text = item.alt_text %}
   {% endfor %}
-  {% if can_manage %}
-    <form method="post" action="/admin/media/{{ asset.id }}/delete">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn-danger" type="submit">{{ _("media.delete") }}</button>
-    </form>
+  <button class="media-open" type="button" data-full="/media/{{ asset.id }}/original" aria-label="{{ _('media.open') }}">
+    <img src="/media/{{ asset.id }}" alt="{{ thumb_alt.text or asset.filename or '' }}">
+  </button>
+  <p class="meta">{{ asset.filename or _("media.unnamed") }} · {{ asset.mime_type }}{% if asset.width and asset.height %} · {{ asset.width }}×{{ asset.height }}{% endif %}{% if asset.credit %} · {{ asset.credit }}{% endif %}</p>
+  {% if asset.id in in_use %}
+    <p class="meta">{{ _("media.in_use") }}</p>
   {% endif %}
+  <details>
+    <summary class="btn-quiet">{{ _("media.edit") }}</summary>
+    <form class="form" method="post" action="/admin/media/{{ asset.id }}/name">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="q" value="{{ query }}">
+      <input type="hidden" name="page" value="{{ page }}">
+      <label class="field">{{ _("media.filename") }}
+        <input name="filename" required maxlength="200" value="{{ asset.filename or '' }}">
+      </label>
+      <label class="field">{{ _("media.credit") }}
+        <input name="credit" maxlength="200" value="{{ asset.credit or '' }}">
+      </label>
+      <button class="btn-line" type="submit">{{ _("media.save") }}</button>
+    </form>
+    {% for code in locales %}
+      {% set writing = "rtl" if code.split("-")[0] in ["ar", "fa", "he", "ur"] else "ltr" %}
+      {% set current = namespace(caption="", alt="") %}
+      {% for item in asset.translations if item.locale == code %}
+        {% set current.caption = item.caption or "" %}
+        {% set current.alt = item.alt_text or "" %}
+      {% endfor %}
+      <form class="form" method="post" action="/admin/media/{{ asset.id }}/caption">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="q" value="{{ query }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <input type="hidden" name="locale" value="{{ code }}">
+        <fieldset class="media-locale" dir="{{ writing }}">
+          <legend>{{ _("locale." ~ code) }}</legend>
+          <label class="field">{{ _("media.caption") }}
+            <input name="caption" value="{{ current.caption }}">
+          </label>
+          <label class="field">{{ _("media.alt") }}
+            <input name="alt_text" value="{{ current.alt }}">
+          </label>
+          <button class="btn-line" type="submit">{{ _("media.save") }}</button>
+        </fieldset>
+      </form>
+    {% endfor %}
+    {% if can_manage and asset.id not in in_use %}
+      <form method="post" action="/admin/media/{{ asset.id }}/delete" onsubmit="return confirm({{ _('media.delete_confirm')|tojson }})">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="q" value="{{ query }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <button class="btn-danger" type="submit">{{ _("media.delete") }}</button>
+      </form>
+    {% endif %}
+  </details>
 </li>
 {% endfor %}
