@@ -1,10 +1,10 @@
 """Staff screens for sections, tags, accounts, and the audit log."""
 
 import uuid
-from typing import Any
-from urllib.parse import quote, urlencode
+from typing import Annotated, Any
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from starlette.datastructures import FormData
@@ -20,7 +20,6 @@ from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.i18n import TextDirection
-from newsroom.core.schemas import PageParams
 from newsroom.locales.service import LocaleCreate, LocaleService
 from newsroom.settings.service import SettingsService, SiteSettingsUpdate
 from newsroom.taxonomy.schemas import (
@@ -35,6 +34,7 @@ from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.models import UserKind, UserStatus
 from newsroom.users.schemas import RoleCreate, RoleGrantCreate, StaffCreate, UserUpdate
 from newsroom.users.service import UserService
+from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
 
 router = APIRouter(
@@ -188,22 +188,35 @@ async def tags_page(
     db: DbSession,
     notice: str | None = None,
     detail: str | None = None,
-    cursor: str | None = None,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
     _require(staff, Perm.TAG_MANAGE)
-    page = await TaxonomyService(db).list_tags(PageParams(limit=_PAGE, cursor=cursor), q=None)
+    fragment = is_fragment(request, cursor)
+    found = await TaxonomyService(db).list_tags(
+        listing_params(_PAGE, page, fragment, cursor),
+        q=None,
+    )
     tags = [
-        {"id": tag.id, "key": tag.key, "locales": _filled(tag.translations)} for tag in page.items
+        {"id": tag.id, "key": tag.key, "locales": _filled(tag.translations)} for tag in found.items
     ]
     return templates.TemplateResponse(
         request,
-        "admin/tags.html",
+        "admin/fragments/tags.html" if fragment else "admin/tags.html",
         {
             "staff": staff,
             "tags": tags,
-            "next_cursor": page.next_cursor,
             "notice": notice,
             "detail": detail,
+            **pager_context(
+                path="/admin/tags",
+                page=page,
+                extra=None,
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
         },
     )
 
@@ -228,26 +241,39 @@ async def users_page(
     db: DbSession,
     kind: UserKind | None = None,
     q: str | None = None,
-    cursor: str | None = None,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     notice: str | None = None,
     detail: str | None = None,
 ) -> HTMLResponse:
     _require(staff, Perm.USER_READ)
-    page = await UserService(db).list_users(
-        PageParams(limit=_PAGE, cursor=cursor), kind=kind, status=None, q=q
+    fragment = is_fragment(request, cursor)
+    found = await UserService(db).list_users(
+        listing_params(_PAGE, page, fragment, cursor),
+        kind=kind,
+        status=None,
+        q=q,
     )
     return templates.TemplateResponse(
         request,
-        "admin/users.html",
+        "admin/fragments/users.html" if fragment else "admin/users.html",
         {
             "staff": staff,
-            "users": page.items,
+            "users": found.items,
             "kind_value": kind.value if kind else "",
             "query": q or "",
-            "next_cursor": page.next_cursor,
             "can_manage": staff.grants.has_anywhere(Perm.USER_MANAGE),
             "notice": notice,
             "detail": detail,
+            **pager_context(
+                path="/admin/users",
+                page=page,
+                extra={"kind": kind.value if kind else "", "q": q or ""},
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
         },
     )
 
@@ -376,26 +402,33 @@ async def audit_page(
     db: DbSession,
     action: str | None = None,
     entity_type: str | None = None,
-    cursor: str | None = None,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
     _require(staff, Perm.AUDIT_READ)
-    page = await AuditService(db).list_events(
-        PageParams(limit=_PAGE, cursor=cursor),
+    fragment = is_fragment(request, cursor)
+    found = await AuditService(db).list_events(
+        listing_params(_PAGE, page, fragment, cursor),
         action=action or None,
         entity_type=entity_type or None,
     )
     filters = {"action": action or "", "entity_type": entity_type or ""}
-    nxt = None
-    if page.next_cursor:
-        nxt = "/admin/audit?" + urlencode({**filters, "cursor": page.next_cursor})
     return templates.TemplateResponse(
         request,
-        "admin/audit.html",
+        "admin/fragments/audit.html" if fragment else "admin/audit.html",
         {
             "staff": staff,
-            "events": page.items,
+            "events": found.items,
             "filters": filters,
-            "next_url": nxt,
+            **pager_context(
+                path="/admin/audit",
+                page=page,
+                extra=filters,
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
         },
     )
 

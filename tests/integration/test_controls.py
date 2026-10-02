@@ -150,6 +150,30 @@ async def test_legal_hold_blocks_publish_until_counsel_is_recorded(
         json={"action": "publish", "lock_version": 3},
     )
     assert published.status_code == 200, published.text
+    taken = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": editor_csrf},
+        json={
+            "action": "unpublish",
+            "lock_version": published.json()["lock_version"],
+            "reason": "counsel asked for it down",
+            "takedown_reason": "legal",
+        },
+    )
+    assert taken.status_code == 200, taken.text
+    held_again = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/legal-hold",
+        headers={"x-csrf-token": editor_csrf},
+        json={"reason": "counsel has not cleared a return"},
+    )
+    assert held_again.status_code == 204, held_again.text
+    blocked_again = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": editor_csrf},
+        json={"action": "republish", "lock_version": taken.json()["lock_version"]},
+    )
+    assert blocked_again.status_code == 409
+    assert blocked_again.json()["code"] == "legal_hold"
     page = await client.get(f"/admin/stories/{localization_id}")
     assert page.status_code == 200
     assert "article.clear_legal" in page.text

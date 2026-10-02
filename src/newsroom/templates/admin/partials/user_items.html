@@ -1,0 +1,6 @@
+{% for account in users %}
+<li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+  <a class="font-bold text-ink no-underline" dir="ltr" href="/admin/users/{{ account.id }}">{{ account.email }}</a>
+  <span class="text-sm text-muted">{{ account.display_name or "" }} · {{ _("manage.kind." ~ account.kind.value) }} · {{ _("manage.status." ~ account.status.value) }}</span>
+</li>
+{% endfor %}

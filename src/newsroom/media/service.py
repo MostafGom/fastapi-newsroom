@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import String, cast, select
+from sqlalchemy import String, cast, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
@@ -14,6 +14,7 @@ from newsroom.auth.service import utcnow
 from newsroom.authz.permissions import Perm
 from newsroom.core.config import Settings, get_settings
 from newsroom.core.errors import Conflict, NotFound, PermissionDenied
+from newsroom.core.schemas import Page, PageParams, decode_keyset, encode_cursor
 from newsroom.media.models import MediaAsset, MediaTranslation
 from newsroom.media.schemas import MediaOut, MediaTranslationIn
 
@@ -173,13 +174,29 @@ class MediaService:
         )
         return used is not None
 
-    async def list_recent(self) -> list[MediaOut]:
-        rows = (
-            await self.db.scalars(
-                select(MediaAsset).order_by(MediaAsset.created_at.desc()).limit(40)
+    async def list_page(self, paging: PageParams) -> Page[MediaOut]:
+        stmt = select(MediaAsset).order_by(MediaAsset.created_at.desc(), MediaAsset.id.desc())
+        if paging.cursor:
+            created_at, row_id = decode_keyset(paging.cursor, "created_at")
+            stmt = stmt.where(
+                tuple_(MediaAsset.created_at, MediaAsset.id) < tuple_(created_at, row_id)
             )
-        ).all()
-        return [MediaOut.model_validate(row, from_attributes=True) for row in rows]
+        rows = list((await self.db.scalars(stmt.limit(paging.limit + 1))).all())
+        next_cursor = None
+        if len(rows) > paging.limit:
+            rows = rows[: paging.limit]
+            last = rows[-1]
+            next_cursor = encode_cursor(
+                {"created_at": last.created_at.isoformat(), "id": str(last.id)}
+            )
+        return Page(
+            items=[MediaOut.model_validate(row, from_attributes=True) for row in rows],
+            next_cursor=next_cursor,
+        )
+
+    async def list_recent(self) -> list[MediaOut]:
+        page = await self.list_page(PageParams(limit=40, cursor=None))
+        return page.items
 
     async def file(self, asset_id: uuid.UUID, *, original: bool = False) -> tuple[Path, str]:
         asset = await self.db.get(MediaAsset, asset_id)

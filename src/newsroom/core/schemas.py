@@ -1,5 +1,6 @@
 import base64
 import json
+import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
@@ -61,6 +62,17 @@ def decode_cursor(cursor: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise InvalidCursor("Malformed cursor")
     return value
+
+
+def decode_keyset(cursor: str, time_key: str) -> tuple[datetime, uuid.UUID]:
+    """Read a ``(timestamp, id)`` cursor. A bad value is ``InvalidCursor``."""
+    raw = decode_cursor(cursor)
+    try:
+        moment = datetime.fromisoformat(raw[time_key])
+        row_id = uuid.UUID(raw["id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise InvalidCursor("Malformed cursor") from exc
+    return moment, row_id
 
 
 class PageParams(BaseModel):

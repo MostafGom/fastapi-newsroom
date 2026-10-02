@@ -12,23 +12,22 @@
       </div>
       <a class="btn-line" href="/admin/stories/new">{{ _("desk.new") }}</a>
     </div>
+    <div id="listing">
     {% if stories %}
-      <ul class="grid gap-2">
-        {% for story in stories %}
-          <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
-            <a class="font-bold text-ink no-underline" href="/admin/stories/{{ story.localization_id }}">{{ story.title }}</a>
-            <span class="text-sm text-muted">{{ _("locale." ~ story.locale) }} · {{ _("desk.status." ~ story.status) }}</span>
-          </li>
-        {% endfor %}
+      <ul id="listing-items" class="grid gap-2">
+        {% include "admin/partials/desk_stories.html" %}
       </ul>
     {% else %}
       <p class="text-muted">{{ _("desk.empty") }}</p>
     {% endif %}
+    {% include "partials/pager.html" %}
+    </div>
   </section>
   <section class="panel">
     <h2>{{ _("admin.dashboard.areas") }}</h2>
     <p class="lede">{{ _("admin.dashboard.areas_help") }}</p>
     <ul class="area-grid">
+      <li><a href="/admin/workflow"><strong>{{ _("flow.nav") }}</strong><span class="lede">{{ _("guide.flow") }}</span></a></li>
       {% if staff.grants.has_anywhere(perms.ARTICLE_CREATE) %}
         <li><a href="/admin/stories/new"><strong>{{ _("desk.new") }}</strong><span class="lede">{{ _("guide.new") }}</span></a></li>
         <li><a href="/admin/authors"><strong>{{ _("manage.authors") }}</strong><span class="lede">{{ _("guide.authors") }}</span></a></li>

@@ -1,0 +1,11 @@
+<footer class="story-foot">
+  <p class="meta">
+    {% if bylines %}
+      {{ _("article.by") }}
+      {% for byline in bylines %}{{ byline.display_name }}{% if not loop.last %}{{ "، " if direction == "rtl" else ", " }}{% endif %}{% endfor %}
+      ·
+    {% endif %}
+    <time datetime="{{ published_at.isoformat() }}">{{ format_date(published_at, locale) }}</time>
+  </p>
+  <a class="btn-line" href="/{{ locale }}/article/{{ slug }}">{{ _("article.read") }}</a>
+</footer>

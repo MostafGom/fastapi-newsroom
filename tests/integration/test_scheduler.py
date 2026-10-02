@@ -161,3 +161,71 @@ async def test_due_story_goes_live_and_an_expired_one_comes_down(
     assert takedown is not None
     assert takedown.actor_id is None
     assert takedown.after == {"status": "unpublished", "via": "scheduler"}
+
+
+async def test_cancelling_a_schedule_clears_the_embargo_end(
+    client: AsyncClient, db: AsyncSession, make_staff: MakeStaff
+) -> None:
+    section = await TaxonomyService(db).create_section(
+        SectionCreate(
+            key="cancel-desk",
+            translations=[SectionTranslationIn(locale="en", name="Desk", slug="cancel-desk")],
+        )
+    )
+    writer = await make_staff("writer")
+    editor = await make_staff("editor", section_id=section.id)
+    author = await author_for_user(db, writer.id)  # type: ignore[arg-type]
+    assert author is not None
+    writer_csrf = await api_login(client, writer)
+    localization_id = await _file(
+        client, writer_csrf, str(section.id), str(author.id), "cancelled-embargo", "Cancelled"
+    )
+    client.cookies.clear()
+    editor_csrf = await api_login(client, editor)
+    current = await client.get(f"/api/v1/admin/localizations/{localization_id}")
+    approved = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": editor_csrf},
+        json={
+            "action": "approve",
+            "lock_version": current.json()["lock_version"],
+            "reason": "embargo, copy already done",
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    start = datetime.now(UTC) + timedelta(hours=6)
+    too_early = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": editor_csrf},
+        json={
+            "action": "schedule",
+            "lock_version": approved.json()["lock_version"],
+            "publish_at": start.isoformat(),
+            "unpublish_at": (start - timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert too_early.status_code == 409, too_early.text
+    scheduled = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": editor_csrf},
+        json={
+            "action": "schedule",
+            "lock_version": approved.json()["lock_version"],
+            "publish_at": start.isoformat(),
+            "unpublish_at": (start + timedelta(hours=12)).isoformat(),
+        },
+    )
+    assert scheduled.status_code == 200, scheduled.text
+    cancelled = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": editor_csrf},
+        json={
+            "action": "cancel_schedule",
+            "lock_version": scheduled.json()["lock_version"],
+        },
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    row = await _row(db, localization_id)
+    assert row.status.value == "approved"
+    assert row.publish_at is None
+    assert row.unpublish_at is None

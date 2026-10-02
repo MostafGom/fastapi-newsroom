@@ -75,62 +75,23 @@
   <input name="credit" placeholder="{{ _('media.credit') }}">
   <button class="btn-line" type="submit">{{ _("media.upload") }}</button>
 </form>
-<section class="panel" x-data="{ full: '' }">
+<section class="panel" x-data="{ full: '' }"
+         @click="const opener = $event.target.closest('[data-full]'); if (opener) { full = opener.dataset.full; $refs.shot.showModal() }">
 {% if assets %}
-  <ul class="media-grid">
-    {% for asset in assets %}
-      <li class="media-card">
-        <button class="media-open" type="button" aria-label="{{ _('media.open') }}"
-                @click="full = '/media/{{ asset.id }}/original'; $refs.shot.showModal()">
-          <img src="/media/{{ asset.id }}" alt="{{ asset.credit or '' }}">
-        </button>
-        <p class="meta">{{ asset.filename or _("media.unnamed") }} · {{ asset.mime_type }}{% if asset.credit %} · {{ asset.credit }}{% endif %}</p>
-        <form class="form" method="post" action="/admin/media/{{ asset.id }}/name">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <label class="field">{{ _("media.filename") }}
-            <input name="filename" required maxlength="200" value="{{ asset.filename or '' }}">
-          </label>
-          <button class="btn-line" type="submit">{{ _("media.rename") }}</button>
-        </form>
-        {% for code in locales %}
-          {% set writing = "rtl" if code.split("-")[0] in ["ar", "fa", "he", "ur"] else "ltr" %}
-          {% set current = namespace(caption="", alt="") %}
-          {% for item in asset.translations if item.locale == code %}
-            {% set current.caption = item.caption or "" %}
-            {% set current.alt = item.alt_text or "" %}
-          {% endfor %}
-          <form class="form" method="post" action="/admin/media/{{ asset.id }}/caption">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="locale" value="{{ code }}">
-            <fieldset class="media-locale" dir="{{ writing }}">
-              <legend>{{ _("locale." ~ code) }}</legend>
-              <label class="field">{{ _("media.caption") }}
-                <input name="caption" value="{{ current.caption }}">
-              </label>
-              <label class="field">{{ _("media.alt") }}
-                <input name="alt_text" value="{{ current.alt }}">
-              </label>
-              <button class="btn-line" type="submit">{{ _("media.saved") }}</button>
-            </fieldset>
-          </form>
-        {% endfor %}
-        {% if can_manage %}
-          <form method="post" action="/admin/media/{{ asset.id }}/delete">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="btn-danger" type="submit">{{ _("media.delete") }}</button>
-          </form>
-        {% endif %}
-      </li>
-    {% endfor %}
-  </ul>
-  <dialog class="media-view" x-ref="shot" @click="if ($event.target === $el) $el.close()">
-    <form method="dialog">
-      <button class="btn-line" type="submit">{{ _("manage.close") }}</button>
-    </form>
-    <img :src="full" alt="">
-  </dialog>
+  <div id="listing">
+    <ul id="listing-items" class="media-grid">
+      {% include "admin/partials/media_items.html" %}
+    </ul>
+    {% include "partials/pager.html" %}
+  </div>
 {% else %}
   <p class="text-muted">{{ _("media.empty") }}</p>
 {% endif %}
+<dialog class="media-view" x-ref="shot" @click="if ($event.target === $el) $el.close()">
+  <form method="dialog">
+    <button class="btn-line" type="submit">{{ _("manage.close") }}</button>
+  </form>
+  <img :src="full" alt="">
+</dialog>
 </section>
 {% endblock %}

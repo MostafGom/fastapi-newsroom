@@ -424,6 +424,7 @@ async def move_story(
     lock_version: Annotated[int, Form()],
     reason: Annotated[str, Form(max_length=2000)] = "",
     publish_at: Annotated[str, Form()] = "",
+    unpublish_at: Annotated[str, Form()] = "",
     takedown_reason: Annotated[str, Form()] = "",
 ) -> RedirectResponse:
     try:
@@ -436,6 +437,7 @@ async def move_story(
                 lock_version=lock_version,
                 reason=reason.strip() or None,
                 publish_at=_when(publish_at),
+                unpublish_at=_when(unpublish_at),
                 takedown_reason=TakedownReason(takedown_reason) if takedown_reason else None,
             ),
         )
@@ -570,9 +572,11 @@ async def _edit_context(
     }
 
 
-async def story_rows(staff: CurrentStaff, db: DbSession) -> list[StoryRow]:
+async def story_rows(
+    staff: CurrentStaff, db: DbSession, *, cursor: str | None, limit: int
+) -> tuple[list[StoryRow], str | None]:
     page = await ArticleService(db).list_admin(
-        staff, PageParams(limit=50, cursor=None), status=None, locale=None, section_id=None
+        staff, PageParams(limit=limit, cursor=cursor), status=None, locale=None, section_id=None
     )
     rows: list[StoryRow] = []
     for article in page.items:
@@ -586,4 +590,4 @@ async def story_rows(staff: CurrentStaff, db: DbSession) -> list[StoryRow]:
             )
             for item in article.localizations
         )
-    return rows
+    return rows, page.next_cursor

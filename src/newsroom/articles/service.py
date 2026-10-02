@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -60,7 +60,7 @@ from newsroom.audit.service import record_event
 from newsroom.auth.principal import Principal
 from newsroom.authz.permissions import Perm
 from newsroom.core.errors import Conflict, Gone, NotFound, PermissionDenied
-from newsroom.core.schemas import Page, PageParams
+from newsroom.core.schemas import Page, PageParams, decode_keyset, encode_cursor
 from newsroom.media.models import MediaAsset
 from newsroom.search.service import SearchService
 from newsroom.taxonomy.models import Section, SectionTranslation, Tag, TagTranslation
@@ -218,7 +218,7 @@ class ArticleService:
     async def set_legal_hold(
         self, actor: Principal, localization_id: uuid.UUID, reason: str
     ) -> None:
-        """Block schedule and publish until counsel is recorded. Not a workflow status."""
+        """Block schedule, publish, and republish until counsel is recorded. Not a status."""
         localization = await self._localization(localization_id)
         self._require(actor, Perm.ARTICLE_REVIEW, localization.article.section_id)
         self._require_reason(reason, "hold a story")
@@ -423,12 +423,19 @@ class ArticleService:
         if localization.legal_hold and payload.action in {
             ArticleAction.PUBLISH,
             ArticleAction.SCHEDULE,
+            ArticleAction.REPUBLISH,
         }:
-            raise LegalHoldActive("Publish is blocked until legal hold is cleared")
+            raise LegalHoldActive("Going live is blocked until legal hold is cleared")
         if payload.action is ArticleAction.SCHEDULE and (
             payload.publish_at is None or payload.publish_at <= utcnow()
         ):
             raise Conflict("publish_at must be in the future")
+        if (
+            payload.action is ArticleAction.SCHEDULE
+            and payload.unpublish_at is not None
+            and (payload.publish_at is None or payload.unpublish_at <= payload.publish_at)
+        ):
+            raise Conflict("unpublish_at must be after publish_at")
         if payload.action is ArticleAction.UNPUBLISH and payload.takedown_reason is None:
             raise Conflict("A takedown reason code is required")
         before = localization.status.value
@@ -538,9 +545,17 @@ class ArticleService:
         locale: str | None,
         section_id: uuid.UUID | None,
     ) -> Page[ArticleAdminOut]:
+        if actor.user.kind is not UserKind.STAFF:
+            return Page(items=[], next_cursor=None)
+        visible = ArticleLocalization.deleted_at.is_(None)
+        if status is not None:
+            visible = and_(visible, ArticleLocalization.status == status)
+        if locale is not None:
+            visible = and_(visible, ArticleLocalization.locale == locale)
         stmt = (
             select(Article)
-            .order_by(Article.created_at.desc())
+            .where(Article.localizations.any(visible))
+            .order_by(Article.created_at.desc(), Article.id.desc())
             .options(
                 selectinload(Article.localizations).selectinload(ArticleLocalization.revisions),
                 selectinload(Article.article_authors),
@@ -549,9 +564,23 @@ class ArticleService:
         )
         if section_id is not None:
             stmt = stmt.where(Article.section_id == section_id)
+        scope = actor.grants.sections_with(Perm.ARTICLE_READ)
+        if scope is not None:
+            own = Article.created_by == actor.user.id
+            stmt = stmt.where(or_(Article.section_id.in_(scope), own) if scope else own)
+        if paging.cursor:
+            created_at, row_id = decode_keyset(paging.cursor, "created_at")
+            stmt = stmt.where(tuple_(Article.created_at, Article.id) < tuple_(created_at, row_id))
         rows = list((await self.db.scalars(stmt.limit(paging.limit + 1))).all())
+        next_cursor = None
+        if len(rows) > paging.limit:
+            rows = rows[: paging.limit]
+            last = rows[-1]
+            next_cursor = encode_cursor(
+                {"created_at": last.created_at.isoformat(), "id": str(last.id)}
+            )
         items = []
-        for article in rows[: paging.limit]:
+        for article in rows:
             if not self._can_read(actor, article):
                 continue
             out = self._admin_from(article)
@@ -567,7 +596,7 @@ class ArticleService:
                 if not out.localizations:
                     continue
             items.append(out)
-        return Page(items=items, next_cursor=None)
+        return Page(items=items, next_cursor=next_cursor)
 
     async def get_admin(self, actor: Principal, article_id: uuid.UUID) -> ArticleAdminOut:
         article = await self._article(article_id)
@@ -592,10 +621,10 @@ class ArticleService:
                 ArticleLocalization.locale == locale,
                 ArticleLocalization.status == ArticleStatus.PUBLISHED,
                 ArticleLocalization.deleted_at.is_(None),
+                ArticleLocalization.published_at.is_not(None),
             )
-            .order_by(ArticleLocalization.published_at.desc())
+            .order_by(ArticleLocalization.published_at.desc(), ArticleLocalization.id.desc())
             .options(*_public_article_options(selectinload(ArticleLocalization.article)))
-            .limit(paging.limit + 1)
         )
         if section_slug is not None:
             stmt = stmt.where(
@@ -621,9 +650,24 @@ class ArticleService:
                     )
                 )
             )
-        rows = list((await self.db.scalars(stmt)).all())
-        items = [self._summary(row, locale) for row in rows[: paging.limit]]
-        return Page(items=items, next_cursor=None)
+        if paging.cursor:
+            published_at, row_id = decode_keyset(paging.cursor, "published_at")
+            stmt = stmt.where(
+                tuple_(ArticleLocalization.published_at, ArticleLocalization.id)
+                < tuple_(published_at, row_id)
+            )
+        rows = list((await self.db.scalars(stmt.limit(paging.limit + 1))).all())
+        next_cursor = None
+        if len(rows) > paging.limit:
+            rows = rows[: paging.limit]
+            last = rows[-1]
+            published_at = last.published_at
+            if published_at is not None:
+                next_cursor = encode_cursor(
+                    {"published_at": published_at.isoformat(), "id": str(last.id)}
+                )
+        items = [self._summary(row, locale) for row in rows]
+        return Page(items=items, next_cursor=next_cursor)
 
     async def get_public(self, locale: str, slug: str) -> PublicLookup:
         localization = await self.db.scalar(
@@ -846,6 +890,7 @@ class ArticleService:
         elif action is ArticleAction.CANCEL_SCHEDULE:
             localization.status = ArticleStatus.APPROVED
             localization.publish_at = None
+            localization.unpublish_at = None
         elif action is ArticleAction.UNPUBLISH:
             localization.status = ArticleStatus.UNPUBLISHED
         else:

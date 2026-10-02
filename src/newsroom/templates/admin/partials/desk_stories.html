@@ -1,0 +1,6 @@
+{% for story in stories %}
+<li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+  <a class="font-bold text-ink no-underline" href="/admin/stories/{{ story.localization_id }}">{{ story.title }}</a>
+  <span class="text-sm text-muted">{{ _("locale." ~ story.locale) }} · {{ _("desk.status." ~ story.status) }}</span>
+</li>
+{% endfor %}

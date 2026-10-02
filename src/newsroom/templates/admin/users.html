@@ -36,18 +36,11 @@
 </form>
 {% endif %}
 {% if users %}
-<section class="panel">
-  <ul class="grid gap-2">
-    {% for account in users %}
-      <li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
-        <a class="font-bold text-ink no-underline" dir="ltr" href="/admin/users/{{ account.id }}">{{ account.email }}</a>
-        <span class="text-sm text-muted">{{ account.display_name or "" }} · {{ _("manage.kind." ~ account.kind.value) }} · {{ _("manage.status." ~ account.status.value) }}</span>
-      </li>
-    {% endfor %}
+<section class="panel" id="listing">
+  <ul id="listing-items" class="grid gap-2">
+    {% include "admin/partials/user_items.html" %}
   </ul>
-  {% if next_cursor %}
-    <p class="mt-4"><a href="/admin/users?cursor={{ next_cursor }}{% if kind_value %}&amp;kind={{ kind_value }}{% endif %}{% if query %}&amp;q={{ query }}{% endif %}">{{ _("manage.more") }}</a></p>
-  {% endif %}
+  {% include "partials/pager.html" %}
 </section>
 {% else %}
   <p class="text-muted">{{ _("manage.no_users") }}</p>

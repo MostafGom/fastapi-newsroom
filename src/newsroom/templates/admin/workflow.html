@@ -1,0 +1,183 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("flow.title") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<p class="kicker">{{ _("flow.nav") }}</p>
+<h1 class="mt-2 text-2xl font-bold">{{ _("flow.title") }}</h1>
+<p class="lede mt-3 max-w-3xl">{{ _("flow.intro") }}</p>
+
+<section class="panel mt-6">
+  <h2>{{ _("flow.ordinary") }}</h2>
+  <p class="lede">{{ _("flow.ordinary_help") }}</p>
+  <ol class="flow">
+    <li class="flow-step">
+      <div class="flow-rail" aria-hidden="true"><span class="flow-index">1</span><span class="flow-line"></span></div>
+      <div class="flow-body">
+        <p class="kicker">{{ _("flow.by.writer") }}</p>
+        <h3>{{ _("flow.step.draft_title") }}</h3>
+        <p>{{ _("flow.step.draft") }}</p>
+        <p class="flow-audience">{{ _("flow.readers_no") }}</p>
+      </div>
+    </li>
+    <li class="flow-step">
+      <div class="flow-rail" aria-hidden="true"><span class="flow-index">2</span><span class="flow-line"></span></div>
+      <div class="flow-body">
+        <p class="kicker">{{ _("desk.action.submit") }} · {{ _("flow.by.writer") }}</p>
+        <h3>{{ _("flow.step.review_title") }}</h3>
+        <p>{{ _("flow.step.review") }}</p>
+        <p class="flow-audience">{{ _("flow.readers_no") }}</p>
+      </div>
+    </li>
+    <li class="flow-step">
+      <div class="flow-rail" aria-hidden="true"><span class="flow-index">3</span><span class="flow-line"></span></div>
+      <div class="flow-body">
+        <p class="kicker">{{ _("desk.action.send_to_copy") }} · {{ _("flow.by.editor") }}</p>
+        <h3>{{ _("flow.step.copy_title") }}</h3>
+        <p>{{ _("flow.step.copy") }}</p>
+        <p class="flow-audience">{{ _("flow.readers_no") }}</p>
+      </div>
+    </li>
+    <li class="flow-step">
+      <div class="flow-rail" aria-hidden="true"><span class="flow-index">4</span><span class="flow-line"></span></div>
+      <div class="flow-body">
+        <p class="kicker">{{ _("desk.action.finish_copy") }} · {{ _("flow.by.copy") }}</p>
+        <h3>{{ _("flow.step.approved_title") }}</h3>
+        <p>{{ _("flow.step.approved") }}</p>
+        <p class="flow-audience">{{ _("flow.readers_no") }}</p>
+      </div>
+    </li>
+    <li class="flow-step">
+      <div class="flow-rail" aria-hidden="true"><span class="flow-index">5</span><span class="flow-line"></span></div>
+      <div class="flow-body">
+        <p class="kicker">{{ _("desk.action.schedule") }} · {{ _("flow.by.editor") }}</p>
+        <h3>{{ _("flow.step.scheduled_title") }}</h3>
+        <p>{{ _("flow.step.scheduled") }}</p>
+        <p class="flow-audience">{{ _("flow.readers_no") }}</p>
+      </div>
+    </li>
+    <li class="flow-step">
+      <div class="flow-rail" aria-hidden="true"><span class="flow-index">6</span><span class="flow-line"></span></div>
+      <div class="flow-body">
+        <p class="kicker">{{ _("desk.action.publish") }} · {{ _("flow.by.worker") }}</p>
+        <h3>{{ _("flow.step.published_title") }}</h3>
+        <p>{{ _("flow.step.published") }}</p>
+        <p class="kicker mt-2">{{ _("flow.readers_yes") }}</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section class="panel mt-5">
+  <h2>{{ _("flow.branches") }}</h2>
+  <div class="flow-cards">
+    <article class="flow-card">
+      <h3>{{ _("flow.back.title") }}</h3>
+      <p>{{ _("flow.back.body") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("flow.skip.title") }}</h3>
+      <p>{{ _("flow.skip.body") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("flow.embargo.title") }}</h3>
+      <p>{{ _("flow.embargo.body") }}</p>
+    </article>
+    <article class="flow-card is-stop">
+      <h3>{{ _("flow.spike.title") }}</h3>
+      <p>{{ _("flow.spike.body") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("flow.hold") }}</h3>
+      <p>{{ _("flow.hold_body") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("flow.languages") }}</h3>
+      <p>{{ _("flow.languages_body") }}</p>
+    </article>
+  </div>
+</section>
+
+<section class="panel mt-5">
+  <h2>{{ _("flow.after") }}</h2>
+  <p class="lede">{{ _("flow.after_help") }}</p>
+  <div class="flow-cards">
+    <article class="flow-card">
+      <h3>{{ _("desk.action.publish_update") }}</h3>
+      <p>{{ _("flow.update") }}</p>
+    </article>
+    <article class="flow-card is-stop">
+      <h3>{{ _("desk.action.unpublish") }}</h3>
+      <p>{{ _("flow.takedown") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("desk.action.archive") }}</h3>
+      <p>{{ _("flow.archive") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("desk.change_slug") }}</h3>
+      <p>{{ _("flow.slug") }}</p>
+    </article>
+  </div>
+</section>
+
+<section class="panel mt-5">
+  <h2>{{ _("flow.roles") }}</h2>
+  <div class="flow-cards">
+    <article class="flow-card">
+      <h3>{{ _("flow.by.writer") }}</h3>
+      <p>{{ _("flow.role.writer") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("flow.by.copy") }}</h3>
+      <p>{{ _("flow.role.copy") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("flow.by.editor") }}</h3>
+      <p>{{ _("flow.role.editor") }}</p>
+    </article>
+    <article class="flow-card">
+      <h3>{{ _("desk.action.archive") }}</h3>
+      <p>{{ _("flow.role.archive") }}</p>
+    </article>
+  </div>
+</section>
+
+<section class="panel mt-5">
+  <h2>{{ _("flow.table") }}</h2>
+  <p class="lede">{{ _("flow.table_help") }}</p>
+  <div class="flow-table-wrap">
+    <table class="flow-table">
+      <thead>
+        <tr>
+          <th scope="col">{{ _("flow.col.action") }}</th>
+          <th scope="col">{{ _("flow.col.from") }}</th>
+          <th scope="col">{{ _("flow.col.to") }}</th>
+          <th scope="col">{{ _("flow.col.who") }}</th>
+          <th scope="col">{{ _("flow.col.reason") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in transitions %}
+          <tr>
+            <td>{{ _("desk.action." ~ row.action.value) }}{% if row.owner_may_act %} *{% endif %}</td>
+            <td>
+              {% for source in row.sources %}
+                {{ _("desk.status." ~ source.value) }}{% if not loop.last %} · {% endif %}
+              {% endfor %}
+            </td>
+            <td>
+              {% if row.target is none %}
+                {{ _("flow.removed") }}
+              {% else %}
+                {{ _("desk.status." ~ row.target.value) }}
+              {% endif %}
+            </td>
+            <td><code dir="ltr">{{ row.permission }}</code></td>
+            <td>{{ _("flow.reason.yes") if row.requires_reason else _("flow.reason.no") }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="lede mt-3">* {{ _("flow.owner") }}</p>
+</section>
+{% endblock %}

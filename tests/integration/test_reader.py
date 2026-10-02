@@ -26,6 +26,9 @@ async def test_seed_demo_publishes_once(db: AsyncSession, client: AsyncClient) -
     home = await client.get("/en/")
     assert home.status_code == 200
     assert "Cabinet approves the 2027 budget" in home.text
+    assert "Read the full article" in home.text
+    assert "story-card-lead" in home.text
+    assert "story-fallback" in home.text
 
     arabic = await client.get("/ar/article/muwazana-2027")
     assert arabic.status_code == 200

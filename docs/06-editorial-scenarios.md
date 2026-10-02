@@ -48,14 +48,20 @@ A ministry hands over a report for 18:00.
 - Story is `approved` (copy already done).
 - Editor: `schedule` with `publish_at` 18:00, and optionally `unpublish_at` if the
   agreement says the piece comes down.
-- Cancelling is `cancel_schedule` → `approved`. The worker is the only publisher after that,
+- Cancelling is `cancel_schedule` → `approved`. That clears both `publish_at` and
+  `unpublish_at`, so a later immediate publish does not inherit the old embargo end.
+  The worker is the only publisher after a schedule is left in place,
   using `FOR UPDATE SKIP LOCKED`, so two workers cannot both publish it.
+- `unpublish_at` must be later than `publish_at`. An embargo that ends before it starts
+  is refused.
 
 ## 5. Investigation and legal
 
 A draft names a company. The editor sets `legal_hold`. The story can keep moving
-(`in_review`, `copy_editing`, `approved`) so the desk is not blocked, but `schedule` and
-`publish` return an error until an editor records clearance (`article.clear_legal`).
+(`in_review`, `copy_editing`, `approved`) so the desk is not blocked, but `schedule`,
+`publish`, and `republish` return an error until an editor records clearance
+(`article.clear_legal`). An update to a story that is already live (`publish_update`)
+is still allowed.
 Counsel is not a user of the app. The editor is recording that counsel signed off, and
 that action is audited.
 

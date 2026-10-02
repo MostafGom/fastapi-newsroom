@@ -122,7 +122,7 @@ read. Translator and editor-in-chief, if added later, are new rows plus a permis
   (`killed`, reason required). It stays in the database. `delete` is only for a writer's
   own draft that never went live. Published stories are taken down (`unpublished`), never killed.
 - **Legal hold** is a flag, not a status (`legal_hold` on the localization, added with the
-  articles tables). Publish and schedule are refused while it is set, until someone with
+  articles tables). Schedule, publish, and republish are refused while it is set, until someone with
   `article.clear_legal` records that counsel signed off. The lawyer is not a user of this app.
 - **No hard deletes of published content** for any role except `article.purge`, which is
   reason-mandatory and still leaves an audit event with the removed identifiers.

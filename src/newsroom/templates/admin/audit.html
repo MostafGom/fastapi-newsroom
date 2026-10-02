@@ -12,24 +12,16 @@
   </label>
   <button class="btn-line" type="submit">{{ _("manage.filter") }}</button>
 </form>
+<div id="listing">
 {% if events %}
 <section class="panel">
-  <ul class="grid gap-2">
-    {% for event in events %}
-      <li class="border-b border-line py-2">
-        <p class="flex flex-wrap items-baseline justify-between gap-3">
-          <span class="font-bold" dir="ltr">{{ event.action }}</span>
-          <span class="text-sm text-muted" dir="ltr">{{ event.occurred_at }}</span>
-        </p>
-        <p class="text-sm text-muted" dir="ltr">{{ event.entity_type }} {{ event.entity_id }}{% if event.reason %} · {{ event.reason }}{% endif %}</p>
-      </li>
-    {% endfor %}
+  <ul id="listing-items" class="grid gap-2">
+    {% include "admin/partials/audit_items.html" %}
   </ul>
-  {% if next_url %}
-    <p class="mt-4"><a href="{{ next_url }}">{{ _("manage.more") }}</a></p>
-  {% endif %}
+  {% include "partials/pager.html" %}
 </section>
 {% else %}
   <p class="text-muted">{{ _("manage.no_events") }}</p>
 {% endif %}
+</div>
 {% endblock %}

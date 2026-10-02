@@ -1,0 +1,20 @@
+{% if page > 1 or next_cursor %}
+<nav id="pager" class="mt-6 flex flex-wrap gap-4" aria-label="{{ _('list.pages') }}"{% if fragment %} hx-swap-oob="outerHTML"{% endif %}>
+  {% if page > 1 %}
+    <a href="{{ prev_href }}"
+       hx-get="{{ prev_href }}"
+       hx-target="#listing"
+       hx-select="#listing"
+       hx-swap="outerHTML show:none"
+       hx-push-url="true">{{ _(prev_key) }}</a>
+  {% endif %}
+  {% if next_cursor %}
+    <a href="{{ more_href }}"
+       hx-get="{{ more_href }}"
+       hx-vals='{"cursor": "{{ next_cursor }}"}'
+       hx-target="#listing-items"
+       hx-swap="beforeend show:none"
+       hx-push-url="{{ more_href }}">{{ _(more_key) }}</a>
+  {% endif %}
+</nav>
+{% endif %}

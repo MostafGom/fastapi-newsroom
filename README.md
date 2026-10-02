@@ -141,10 +141,12 @@ transactions and write audit events in the same transaction as the change.
 Phases 1–3 are in the application: identity and the desk, the public site, search,
 media, homepage curation, the daily briefing, and reader comments.
 
-Cursor pagination is real for reader search and for desk accounts, tags, and the audit
-log. The reader home, section, and tag pages, and the desk story, media, and homepage
-lists, still stop after the first page. Desk search is not built. The public search
-index covers published stories only.
+Cursor pagination covers reader search, section and tag lists, and the latest-story
+home when no homepage slots are set. On the desk it covers the story list, the media
+library, the homepage picker, accounts, tags, and the audit log. The JSON API keeps
+the opaque cursor. HTML lists use `?page=2` and append the next page in place, with
+previous and next on that same page. Languages and roles stay one page. Desk search
+is not built. The public search index covers published stories only.
 
 Still deliberately out of this version: a comment moderation queue, a paywall, staff
 two-factor authentication, and a second search engine for typo tolerance.

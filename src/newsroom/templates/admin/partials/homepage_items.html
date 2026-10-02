@@ -1,0 +1,7 @@
+{% for story in stories %}
+<li class="form-row border border-line bg-card p-3">
+  <input class="input-pos" name="pos_{{ story.slug }}" value="{{ positions.get(story.slug, '') }}" inputmode="numeric" aria-label="{{ _('homepage.position') }}">
+  <input name="label_{{ story.slug }}" value="{{ labels.get(story.slug, '') }}" placeholder="{{ _('homepage.label') }}">
+  <span class="self-center">{{ story.title }}</span>
+</li>
+{% endfor %}

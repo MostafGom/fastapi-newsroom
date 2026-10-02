@@ -22,7 +22,10 @@ Soft deletion (`deleted_at`) is not a status. It is only for a draft that was ne
 A database check constraint enforces `deleted_at IS NULL OR first_published_at IS NULL`.
 
 `legal_hold` is a boolean on the localization, not a status. Most stories never see a lawyer.
-While it is true, publish and schedule are refused until `article.clear_legal` is recorded.
+While it is true, schedule, publish, and republish are refused until `article.clear_legal`
+is recorded. A story that is already live can still receive `publish_update`. The worker
+skips a scheduled row while the hold is on, and publishes it on a later poll once the hold
+is cleared and `publish_at` has passed.
 
 ```mermaid
 stateDiagram-v2
@@ -68,12 +71,12 @@ Concrete newsroom walkthroughs are in [06-editorial-scenarios.md](06-editorial-s
 | `finish_copy` | copy_editing | approved | `article.copy` | no | language signed off. Does not publish |
 | `request_changes` | in_review, copy_editing, approved | changes_requested | `article.review` | yes | desk editor sends it back |
 | `approve` | in_review | approved | `article.review` | yes | skips copy. Used for breaking news; the reason is the audit |
-| `schedule` | approved | scheduled | `article.publish` | no | `publish_at` in the future. Refused while `legal_hold` |
-| `cancel_schedule` | scheduled | approved | `article.publish` | no | |
+| `schedule` | approved | scheduled | `article.publish` | no | `publish_at` in the future. Optional `unpublish_at` must be later. Refused while `legal_hold` |
+| `cancel_schedule` | scheduled | approved | `article.publish` | no | clears `publish_at` and `unpublish_at` |
 | `publish` | approved, scheduled | published | `article.publish` | no | worker may publish `scheduled`. Refused while `legal_hold` |
 | `publish_update` | published | published | `article.publish` | no | moves `published_revision_id` to the working revision |
 | `unpublish` | published | unpublished | `article.unpublish` | yes | also a `TakedownReason`: legal, major_error, duplicate, safety, other |
-| `republish` | unpublished | published | `article.publish` | no | |
+| `republish` | unpublished | published | `article.publish` | no | Refused while `legal_hold` |
 | `kill` | draft, in_review, copy_editing, changes_requested, approved, scheduled | killed | `article.review` | yes | spike. Impossible if the story was ever published |
 | `archive` | published, unpublished, killed | archived | `article.archive` | no | |
 | `unarchive` | archived | unpublished | `article.archive` | no | |
