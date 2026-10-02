@@ -2,7 +2,8 @@
 {% block title %}{{ _("media.heading") }}{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold">{{ _("media.heading") }}</h1>
-<p class="lede mb-5">{{ _("guide.media") }}</p>
+<p class="lede">{{ _("guide.media") }}</p>
+<p class="lede mb-5">{{ _("media.generated") }}</p>
 {% include "admin/partials/notice.html" %}
 <form class="form-row mb-4" method="get" action="/admin/media">
   <label class="field">{{ _("media.filename") }}

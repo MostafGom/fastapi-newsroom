@@ -29,6 +29,7 @@ def _configure_test_env() -> Settings:
         LOG_JSON="false",
         LOG_LEVEL="WARNING",
         MEDIA_DIR=str(ROOT / ".test-media"),
+        OPENROUTER_API_KEY="",
     )
     get_settings.cache_clear()
     return get_settings()

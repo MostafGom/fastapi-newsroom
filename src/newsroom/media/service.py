@@ -2,12 +2,15 @@ import io
 import uuid
 from pathlib import Path
 
+import structlog
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy import String, cast, or_, select, tuple_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
+from newsroom.ai.client import AIError, ImageCopy, describe_image, openrouter_configured
 from newsroom.audit.service import record_event
 from newsroom.auth.principal import Principal
 from newsroom.auth.service import utcnow
@@ -17,6 +20,8 @@ from newsroom.core.errors import Conflict, NotFound, PermissionDenied
 from newsroom.core.schemas import Page, PageParams, decode_keyset, encode_cursor
 from newsroom.media.models import MediaAsset, MediaTranslation
 from newsroom.media.schemas import MediaOut, MediaTranslationIn
+
+log = structlog.get_logger(__name__)
 
 _MAX_BYTES = 8 * 1024 * 1024
 _TYPES = {
@@ -76,7 +81,59 @@ class MediaService:
             after={"mime_type": mime, "byte_size": len(data), "filename": asset.filename},
         )
         await self.db.commit()
+        await self._store_generated(actor, asset)
         return MediaOut.model_validate(asset, from_attributes=True)
+
+    async def _store_generated(self, actor: Principal, asset: MediaAsset) -> None:
+        """Fill empty captions after the file is saved. A model failure leaves them blank."""
+        copies = await self._generated_copies(asset)
+        if not copies:
+            return
+        for locale, copy in copies.items():
+            if locale not in self.settings.supported_locales:
+                continue
+            asset.translations.append(
+                MediaTranslation(
+                    media_id=asset.id,
+                    locale=locale,
+                    caption=copy.caption,
+                    alt_text=copy.alt_text,
+                )
+            )
+        locales = [item.locale for item in asset.translations]
+        if not locales:
+            return
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="media.captioned",
+            entity_type="media_asset",
+            entity_id=asset.id,
+            after={"generated_locales": locales},
+        )
+        try:
+            await self.db.commit()
+        except SQLAlchemyError as exc:
+            log.warning("image_description_unsaved", asset_id=str(asset.id), reason=str(exc))
+            await self.db.rollback()
+            asset.translations.clear()
+
+    async def _generated_copies(self, asset: MediaAsset) -> dict[str, ImageCopy]:
+        if not openrouter_configured(self.settings):
+            return {}
+        display = self._path(f"{asset.id}.display.jpg")
+        if not display.is_file():
+            return {}
+        try:
+            return await describe_image(
+                display.read_bytes(),
+                "image/jpeg",
+                list(self.settings.supported_locales),
+                settings=self.settings,
+            )
+        except AIError as exc:
+            log.warning("image_description_failed", asset_id=str(asset.id), reason=str(exc))
+            return {}
 
     async def set_translation(
         self, actor: Principal, asset_id: uuid.UUID, payload: MediaTranslationIn
