@@ -49,9 +49,170 @@ async function autosave(host, editor) {
   if (input && saved.id) input.value = saved.id;
 }
 
+function csrfToken() {
+  return document.querySelector('meta[name="csrf-token"]')?.content || "";
+}
+
+function refreshChoices(dialog) {
+  const choices = dialog.querySelector("#body-media-choices");
+  if (!choices || !window.htmx) return;
+  const locale = dialog.querySelector("#body-media-locale")?.value || "";
+  const query = dialog.querySelector("#body-media-query")?.value || "";
+  window.htmx.ajax("GET", "/admin/media/picker", {
+    target: choices,
+    swap: "innerHTML",
+    values: { mode: "body", locale, q: query },
+  });
+}
+
+function setStatus(dialog, message) {
+  const status = dialog.querySelector("#body-media-status");
+  if (!status) return;
+  status.hidden = !message;
+  status.textContent = message || "";
+}
+
+function hidePending(dialog) {
+  const pending = dialog.querySelector("#body-media-pending");
+  if (pending) pending.hidden = true;
+  delete dialog.dataset.pending;
+}
+
+function showPending(dialog) {
+  const pending = dialog.querySelector("#body-media-pending");
+  const input = dialog.querySelector("#body-media-pending-alt");
+  if (!pending) return;
+  pending.hidden = false;
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  setStatus(dialog, dialog.dataset.altMissing || "");
+}
+
+function chooseUploaded(dialog, asset, alt) {
+  dialog.dataset.src = `/media/${asset.id}`;
+  dialog.dataset.alt = alt;
+  dialog.close("chosen");
+}
+
+function altForLocale(asset, locale) {
+  const row = (asset.translations || []).find((item) => item.locale === locale);
+  return (row?.alt_text || "").trim();
+}
+
+async function saveAlt(asset, locale, alt, caption) {
+  const response = await fetch(`/api/v1/admin/media/${asset.id}/translations`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": csrfToken(),
+    },
+    body: JSON.stringify({ locale, alt_text: alt, caption: caption || null }),
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+function clearUpload(dialog) {
+  const preview = dialog.querySelector("#body-media-preview");
+  const file = dialog.querySelector("#body-media-file");
+  const clear = dialog.querySelector("#body-media-clear");
+  if (preview?.dataset.objectUrl) {
+    URL.revokeObjectURL(preview.dataset.objectUrl);
+    delete preview.dataset.objectUrl;
+  }
+  if (preview) {
+    preview.hidden = true;
+    preview.removeAttribute("src");
+  }
+  if (file) file.value = "";
+  if (clear) {
+    clear.hidden = true;
+    clear.textContent = clear.dataset.cancel || clear.textContent;
+  }
+}
+
+async function uploadFromEditor(dialog, form) {
+  const fileInput = form.querySelector("#body-media-file");
+  const file = fileInput?.files?.[0];
+  if (!file) return;
+  const previous = dialog.controller;
+  if (previous) previous.abort();
+  const controller = new AbortController();
+  dialog.controller = controller;
+  const clear = dialog.querySelector("#body-media-clear");
+  if (clear) {
+    clear.hidden = false;
+    clear.dataset.cancel = clear.dataset.cancel || clear.textContent;
+    clear.textContent = clear.dataset.stop || clear.textContent;
+  }
+  setStatus(dialog, "");
+  hidePending(dialog);
+  const body = new FormData();
+  body.append("file", file);
+  const credit = form.querySelector('[name="credit"]')?.value?.trim();
+  if (credit) body.append("credit", credit);
+  const typedAlt = form.querySelector('[name="alt_text"]')?.value?.trim() || "";
+  let response;
+  try {
+    response = await fetch("/api/v1/admin/media", {
+      method: "POST",
+      body,
+      signal: controller.signal,
+      credentials: "same-origin",
+      headers: { "X-CSRF-Token": csrfToken() },
+    });
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    setStatus(dialog, dialog.dataset.uploadFailed || "");
+    return;
+  } finally {
+    if (dialog.controller === controller) dialog.controller = null;
+    if (clear) clear.textContent = clear.dataset.cancel || clear.textContent;
+  }
+  if (!response.ok) {
+    let detail = "";
+    try {
+      detail = (await response.json()).detail || "";
+    } catch {
+      detail = "";
+    }
+    setStatus(dialog, detail || dialog.dataset.uploadFailed || "");
+    return;
+  }
+  const asset = await response.json();
+  const locale = dialog.querySelector("#body-media-locale")?.value || "";
+  const existing = (asset.translations || []).find((item) => item.locale === locale);
+  clearUpload(dialog);
+  form.querySelector('[name="credit"]').value = "";
+  form.querySelector('[name="alt_text"]').value = "";
+  if (typedAlt) {
+    const saved = await saveAlt(asset, locale, typedAlt, existing?.caption);
+    if (!saved) {
+      setStatus(dialog, dialog.dataset.uploadFailed || "");
+      refreshChoices(dialog);
+      return;
+    }
+    chooseUploaded(dialog, asset, typedAlt);
+    return;
+  }
+  const generated = altForLocale(asset, locale);
+  if (generated) {
+    chooseUploaded(dialog, asset, generated);
+    return;
+  }
+  dialog.dataset.pending = asset.id;
+  refreshChoices(dialog);
+  showPending(dialog);
+}
+
 function bindLibrary(dialog) {
   if (dialog.dataset.bound === "1") return;
   dialog.dataset.bound = "1";
+  const clear = dialog.querySelector("#body-media-clear");
+  if (clear) clear.dataset.cancel = clear.textContent.trim();
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) {
       dialog.close();
@@ -65,6 +226,53 @@ function bindLibrary(dialog) {
     dialog.dataset.alt = alt;
     dialog.close("chosen");
   });
+  dialog.querySelector("#body-media-file")?.addEventListener("change", () => {
+    const file = dialog.querySelector("#body-media-file")?.files?.[0];
+    const preview = dialog.querySelector("#body-media-preview");
+    const button = dialog.querySelector("#body-media-clear");
+    if (preview?.dataset.objectUrl) URL.revokeObjectURL(preview.dataset.objectUrl);
+    if (!file || !file.type.startsWith("image/") || !preview) {
+      if (preview) {
+        preview.hidden = true;
+        preview.removeAttribute("src");
+      }
+      if (button && !dialog.controller) button.hidden = true;
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    preview.dataset.objectUrl = url;
+    preview.src = url;
+    preview.hidden = false;
+    if (button) button.hidden = false;
+  });
+  clear?.addEventListener("click", () => {
+    if (dialog.controller) {
+      dialog.controller.abort();
+      dialog.controller = null;
+      clear.textContent = clear.dataset.cancel || clear.textContent;
+      return;
+    }
+    clearUpload(dialog);
+  });
+  dialog.querySelector("#body-media-upload")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    uploadFromEditor(dialog, event.currentTarget);
+  });
+  dialog.querySelector("#body-media-use")?.addEventListener("click", async () => {
+    const id = dialog.dataset.pending;
+    const alt = dialog.querySelector("#body-media-pending-alt")?.value?.trim();
+    if (!id || !alt) return;
+    const locale = dialog.querySelector("#body-media-locale")?.value || "";
+    const saved = await saveAlt({ id }, locale, alt, null);
+    if (!saved) {
+      setStatus(dialog, dialog.dataset.uploadFailed || "");
+      return;
+    }
+    chooseUploaded(dialog, { id }, alt);
+  });
+  dialog.addEventListener("close", () => {
+    if (dialog.controller) dialog.controller.abort();
+  });
 }
 
 function openLibrary(editor, host) {
@@ -76,14 +284,12 @@ function openLibrary(editor, host) {
   if (localeInput) localeInput.value = locale;
   const query = dialog.querySelector("#body-media-query");
   if (query) query.value = "";
-  const choices = dialog.querySelector("#body-media-choices");
-  if (choices && window.htmx) {
-    window.htmx.ajax("GET", "/admin/media/picker", {
-      target: choices,
-      swap: "innerHTML",
-      values: { mode: "body", locale, q: "" },
-    });
-  }
+  delete dialog.dataset.src;
+  delete dialog.dataset.alt;
+  clearUpload(dialog);
+  hidePending(dialog);
+  setStatus(dialog, "");
+  refreshChoices(dialog);
   const onClose = () => {
     dialog.removeEventListener("close", onClose);
     if (dialog.returnValue !== "chosen") return;
