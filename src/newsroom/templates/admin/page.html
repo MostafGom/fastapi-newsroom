@@ -1,0 +1,40 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ page.key }} · {{ _("pages.heading") }}{% endblock %}
+{% block content %}
+<p class="mb-3"><a class="no-underline" href="/admin/pages">{{ _("pages.heading") }}</a></p>
+<h1 class="text-2xl font-bold" dir="ltr">{{ page.key }}</h1>
+<p class="lede mb-4">{{ _("guide.pages") }}</p>
+{% include "admin/partials/notice.html" %}
+<p class="mb-4 flex flex-wrap gap-3">
+  {% for locale_code in supported_locales %}
+    <a class="{% if locale_code == code %}font-bold{% endif %}" href="/admin/pages/{{ page.id }}?locale={{ locale_code }}">{{ _("locale." ~ locale_code) }}</a>
+  {% endfor %}
+</p>
+<form class="form form-wide panel" method="post" action="/admin/pages/{{ page.id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="locale" value="{{ code }}">
+  <label class="field">{{ _("manage.sort") }}
+    <input name="sort_order" type="number" value="{{ page.sort_order }}" dir="ltr">
+  </label>
+  <label class="field">{{ _("pages.title") }}
+    <input name="title" required value="{{ translation.title if translation else '' }}">
+  </label>
+  <label class="field">{{ _("manage.slug") }}
+    <input name="slug" required dir="ltr" value="{{ translation.slug if translation else '' }}">
+  </label>
+  <label class="field">{{ _("pages.status") }}
+    <select name="status">
+      <option value="draft" {% if not translation or translation.status != "published" %}selected{% endif %}>{{ _("pages.draft") }}</option>
+      <option value="published" {% if translation and translation.status == "published" %}selected{% endif %}>{{ _("pages.published") }}</option>
+    </select>
+  </label>
+  {% include "admin/partials/richtext.html" %}
+  <div class="form-actions">
+    <button class="btn" type="submit">{{ _("pages.save") }}</button>
+  </div>
+</form>
+<form class="mt-4" method="post" action="/admin/pages/{{ page.id }}/delete" onsubmit="return confirm({{ _('pages.delete_confirm')|tojson }})">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button class="btn-quiet" type="submit">{{ _("pages.delete") }}</button>
+</form>
+{% endblock %}

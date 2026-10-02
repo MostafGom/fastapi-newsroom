@@ -19,8 +19,8 @@ from newsroom.comments.service import CommentService
 from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import NotFound
-from newsroom.homepage.service import HomepageService
 from newsroom.media.service import MediaService
+from newsroom.pages.service import PageService
 from newsroom.search.schemas import SearchFilters
 from newsroom.search.service import SearchService
 from newsroom.taxonomy.service import TaxonomyService
@@ -43,6 +43,7 @@ async def supported_locale(
     if locale not in enabled:
         raise HTTPException(status_code=404)
     request.state.nav_sections = await TaxonomyService(db).public_sections(locale)
+    request.state.site_pages = await PageService(db).public_links(locale)
     return locale
 
 
@@ -77,36 +78,25 @@ async def home(
     page: PageQuery = 1,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
-    curated = await HomepageService(db).public_stories(locale)
-    labels: dict[str, str] = {}
-    fragment = False
-    next_cursor = None
-    if curated is None:
-        fragment = is_fragment(request, cursor)
-        found = await ArticleService(db).list_public(
-            locale,
-            listing_params(_PAGE, page, fragment, cursor),
-            section_slug=None,
-            tag_slug=None,
-        )
-        articles = found.items
-        next_cursor = found.next_cursor
-    else:
-        articles = [item.summary for item in curated]
-        labels = {item.summary.slug: item.label for item in curated if item.label}
+    fragment = is_fragment(request, cursor)
+    found = await ArticleService(db).list_public(
+        locale,
+        listing_params(_PAGE, page, fragment, cursor),
+        section_slug=None,
+        tag_slug=None,
+    )
     template = "public/fragments/stories.html" if fragment else "public/home.html"
     return templates.TemplateResponse(
         request,
         template,
         {
             "reader": reader,
-            "articles": articles,
-            "labels": labels,
+            "articles": found.items,
             **pager_context(
                 path=f"/{locale}/",
-                page=1 if curated is not None else page,
+                page=page,
                 extra=None,
-                next_cursor=next_cursor,
+                next_cursor=found.next_cursor,
                 fragment=fragment,
                 prev_key="list.previous",
                 more_key="list.more",
@@ -229,6 +219,14 @@ async def tag(
             ),
         },
     )
+
+
+@router.get("/{locale}/page/{slug}", response_class=HTMLResponse)
+async def site_page(
+    request: Request, locale: LocaleParam, slug: str, reader: OptionalReader, db: DbSession
+) -> HTMLResponse:
+    page = await PageService(db).get_public(locale, slug)
+    return templates.TemplateResponse(request, "public/page.html", {"reader": reader, "page": page})
 
 
 @router.get("/{locale}/article/{slug}", response_class=HTMLResponse)

@@ -33,7 +33,7 @@ The worker publishes scheduled stories and sends the daily briefing. Start it on
 uv run python -m newsroom.worker
 ```
 
-`newsroom seed` is idempotent. It creates locales, roles, demo accounts, three workflow fixtures, and about 100 extra published briefs (200 localizations) for the **dev** database. A second run does not duplicate them.
+`newsroom seed` is idempotent. It creates locales, roles, demo accounts, the original three stories plus a spread of desk states (draft, copy, changes requested, approved, killed, legal hold, takedown, archive, republish, correction), four published site pages, and about 100 extra published briefs (200 localizations) for the **dev** database. A second run does not duplicate them.
 
 Demo password for every `demo-*` account: `demo-password-123`.
 
@@ -41,9 +41,22 @@ Demo password for every `demo-*` account: `demo-password-123`.
 |---|---|
 | `demo-super@example.com` | Super admin |
 | `demo-editor@example.com` | Editor, politics desk only |
+| `demo-editor-sports@example.com` | Editor, sports desk only |
+| `demo-editor-economy@example.com` | Editor, economy desk only |
+| `demo-editor-science@example.com` | Editor, science desk only |
+| `demo-editor-culture@example.com` | Editor, culture desk only |
 | `demo-copy@example.com` | Copy editor |
-| `demo-writer@example.com` | Writer |
+| `demo-writer@example.com` | Writer, politics |
+| `demo-writer-sports@example.com` | Writer, sports |
+| `demo-writer-economy@example.com` | Writer, economy |
+| `demo-writer-science@example.com` | Writer, science |
+| `demo-writer-culture@example.com` | Writer, culture |
 | `demo-reader@example.com` | Reader |
+| `demo-reader-yusuf@example.com` | Reader |
+| `demo-reader-sara@example.com` | Reader |
+| `demo-reader-leila@example.com` | Reader |
+| `demo-reader-fadi@example.com` | Reader |
+| `demo-reader-huda@example.com` | Reader |
 
 Staff sign in at `/admin/login`. Readers sign in at `/ar/login` or `/en/login`. A staff email on the reader form fails with the same message as a wrong password. An existing super admin such as `admin@example.com` is not reset by seed.
 
@@ -56,7 +69,7 @@ uv run ruff format .
 uv run pyright
 ```
 
-Pytest drops and migrates `newsroom_test`, seeds locales and roles, then rolls each test back. `seed_demo` (the three fixture stories) is what tests call. `seed_volume` (the 100 briefs) is only invoked by the `newsroom seed` command. Do not call `seed_volume` from tests: search and home-page assertions depend on the small fixture.
+Pytest drops and migrates `newsroom_test`, seeds locales and roles, then rolls each test back. `seed_demo` (the fixture stories and site pages) is what tests call. `seed_volume` (the 100 briefs) is only invoked by the `newsroom seed` command. Do not call `seed_volume` from tests: search and home-page assertions depend on the small fixture.
 
 ## What is built
 

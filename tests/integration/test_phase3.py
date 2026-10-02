@@ -30,15 +30,7 @@ def _article_id(payload: dict, slug: str) -> str:
     raise AssertionError(f"missing article {slug}")
 
 
-def _localization_id(payload: dict, slug: str) -> str:
-    for article in payload["items"]:
-        for item in article["localizations"]:
-            if item["slug"] == slug:
-                return item["id"]
-    raise AssertionError(f"missing localization {slug}")
-
-
-async def test_media_homepage_comments_and_briefing(client: AsyncClient, db: AsyncSession) -> None:
+async def test_media_comments_and_briefing(client: AsyncClient, db: AsyncSession) -> None:
     await seed_demo(db)
     editor = StaffAccount(id=None, email="demo-editor@example.com", password=DEMO_PASSWORD)
     token = await api_login(client, editor)
@@ -90,23 +82,10 @@ async def test_media_homepage_comments_and_briefing(client: AsyncClient, db: Asy
     assert f"/media/{asset['id']}" in story_page.text
     assert "The chamber" in story_page.text
 
-    listed = await client.get("/api/v1/admin/articles")
-    localization_id = _localization_id(listed.json(), "cabinet-budget")
-    pinned = await client.put(
-        "/api/v1/admin/homepage",
-        json={
-            "locale": "en",
-            "localization_ids": [localization_id],
-            "labels": ["Budget desk"],
-        },
-        headers=headers,
-    )
-    assert pinned.status_code == 204, pinned.text
     home = await client.get("/en/")
+    assert home.status_code == 200
     assert "Cabinet approves the 2027 budget" in home.text
-    assert "Budget desk" in home.text
-    desk = await client.get("/admin/homepage?locale=en")
-    assert 'value="1"' in desk.text
+    assert "Budget desk" not in home.text
 
     form = await client.get("/en/login")
     await client.post(
@@ -145,8 +124,8 @@ async def test_media_homepage_comments_and_briefing(client: AsyncClient, db: Asy
         == 1
     )
     assert sent
-    assert "/en/article/cabinet-budget" in sent[0]
+    assert "/en/article/writer-culture-note" in sent[0]
     issue = await db.scalar(select(NewsletterIssue).where(NewsletterIssue.locale == "en"))
     assert issue is not None
-    assert "cabinet-budget" in issue.story_slugs
+    assert "writer-culture-note" in issue.story_slugs
     assert await NewsletterService(db).send_due() == 0

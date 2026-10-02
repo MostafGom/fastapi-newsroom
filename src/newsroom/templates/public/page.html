@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} · {{ _("site.title") }}{% endblock %}
+{% block body %}
+{% include "public/partials/header.html" %}
+<main class="mx-auto max-w-[40rem] px-6 py-8">
+  <h1 class="headline headline-story">{{ page.title }}</h1>
+  <article class="article-body mt-6">{{ page.body_html|safe }}</article>
+</main>
+{% include "public/partials/footer.html" %}
+{% endblock %}

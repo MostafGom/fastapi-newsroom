@@ -66,6 +66,7 @@ enforce the fine-grained policy because they have the loaded entity.
 | `role.manage` | Define custom roles and their permissions |
 | `audit.read` | Read the audit log |
 | `settings.manage` | System settings |
+| `page.manage` | Create, edit, publish, and delete site pages |
 
 ## Role matrix
 
@@ -97,6 +98,7 @@ enforce the fine-grained policy because they have the loaded entity.
 | role.manage |  |  |  |  | ✓ |
 | audit.read |  |  |  | ✓ | ✓ |
 | settings.manage |  |  |  |  | ✓ |
+| page.manage |  |  |  | ✓ | ✓ |
 
 Rank: writer 10, copy_editor 15, editor 20, admin 30, super_admin 100.
 

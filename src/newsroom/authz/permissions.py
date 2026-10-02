@@ -29,6 +29,7 @@ class Perm(StrEnum):
     ROLE_MANAGE = "role.manage"
     AUDIT_READ = "audit.read"
     SETTINGS_MANAGE = "settings.manage"
+    PAGE_MANAGE = "page.manage"
 
 
 PERMISSION_DESCRIPTIONS: dict[Perm, str] = {
@@ -59,6 +60,7 @@ PERMISSION_DESCRIPTIONS: dict[Perm, str] = {
     Perm.ROLE_MANAGE: "Define roles and their permissions",
     Perm.AUDIT_READ: "Read the audit log",
     Perm.SETTINGS_MANAGE: "Manage system settings",
+    Perm.PAGE_MANAGE: "Create and publish site pages",
 }
 
 
@@ -110,6 +112,7 @@ _ADMIN = _EDITOR | {
     Perm.USER_MANAGE,
     Perm.ROLE_ASSIGN,
     Perm.AUDIT_READ,
+    Perm.PAGE_MANAGE,
 }
 _SUPER_ADMIN = frozenset(Perm)
 

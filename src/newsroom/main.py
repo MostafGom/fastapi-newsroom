@@ -14,6 +14,7 @@ from newsroom.core.logging import configure_logging
 from newsroom.core.middleware import CsrfCookieMiddleware, RequestContextMiddleware
 from newsroom.web.admin.desk import router as admin_desk_router
 from newsroom.web.admin.manage import router as admin_manage_router
+from newsroom.web.admin.pages import router as admin_pages_router
 from newsroom.web.admin.publishing import router as admin_publishing_router
 from newsroom.web.admin.routes import router as admin_web_router
 from newsroom.web.media_files import router as media_files_router
@@ -58,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_web_router)
     app.include_router(admin_desk_router)
     app.include_router(admin_manage_router)
+    app.include_router(admin_pages_router)
     app.include_router(admin_publishing_router)
     app.include_router(public_web_router)
     return app

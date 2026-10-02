@@ -46,9 +46,16 @@ async def test_search_indexes_published_stories_and_drops_takedowns(
     assert blank.json()["items"] == []
 
     politics = await client.get("/api/v1/search", params={"locale": "en", "section": "politics"})
-    assert [hit["slug"] for hit in politics.json()["items"]] == ["cabinet-budget"]
+    assert {hit["slug"] for hit in politics.json()["items"]} == {
+        "cabinet-budget",
+        "editor-politics-note",
+    }
     sports = await client.get("/api/v1/search", params={"locale": "en", "section": "sports"})
-    assert sports.json()["items"] == []
+    assert {hit["slug"] for hit in sports.json()["items"]} == {
+        "final-whistle",
+        "transfer-window",
+        "editor-sports-note",
+    }
     tagged = await client.get("/api/v1/search", params={"locale": "en", "tag": "budget"})
     assert tagged.json()["items"][0]["slug"] == "cabinet-budget"
 

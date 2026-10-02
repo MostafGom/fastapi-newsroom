@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from newsroom.articles.models import Article
+from newsroom.comments.models import Comment
 from newsroom.seed.demo import DEMO_PASSWORD, READER_EMAIL, seed_demo
 
 CSRF_FIELD = re.compile(r'name="csrf_token" value="([^"]+)"')
@@ -18,14 +19,23 @@ def _csrf(html: str) -> str:
 
 async def test_seed_demo_publishes_once(db: AsyncSession, client: AsyncClient) -> None:
     first = await seed_demo(db)
+    comments = await db.scalar(select(func.count()).select_from(Comment))
     second = await seed_demo(db)
     assert any(line.startswith("created ") for line in first)
     assert not any(line.startswith("created ") for line in second)
-    assert await db.scalar(select(func.count()).select_from(Article)) == 3
+    assert await db.scalar(select(func.count()).select_from(Article)) == 22
+    assert comments == 12
+    assert await db.scalar(select(func.count()).select_from(Comment)) == comments
 
     home = await client.get("/en/")
     assert home.status_code == 200
     assert "Cabinet approves the 2027 budget" in home.text
+    assert "About" in home.text
+    assert 'href="/en/page/about"' in home.text
+    assert "old-session" not in home.text
+    assert "Last year's opening session" not in home.text
+    taken_down = await client.get("/en/article/court-letter")
+    assert taken_down.status_code == 410
     assert "Read the full article" in home.text
     assert "story-card-lead" in home.text
     assert "story-fallback" in home.text
@@ -33,6 +43,17 @@ async def test_seed_demo_publishes_once(db: AsyncSession, client: AsyncClient) -
     arabic = await client.get("/ar/article/muwazana-2027")
     assert arabic.status_code == 200
     assert "الحكومة تقر موازنة 2027" in arabic.text
+    assert "الجلسة طالت، والرقم يحتاج إلى جدول أوضح." in arabic.text
+    assert "Nour Reader" in arabic.text
+
+    sports = await client.get("/en/article/final-whistle")
+    assert sports.status_code == 200
+    assert "Rami Khoury" in sports.text
+    assert "The equalizer changed the night." in sports.text
+
+    desk = await client.get("/en/article/editor-politics-note")
+    assert desk.status_code == 200
+    assert "Layla Nasser" in desk.text
 
     draft = await client.get("/ar/article/maswada-qanun")
     assert draft.status_code == 404

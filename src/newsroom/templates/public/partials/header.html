@@ -1,6 +1,6 @@
 <header class="border-b border-line bg-card">
   <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 pt-4 font-ui text-sm">
-    <p class="text-muted">{{ format_date(edition_date, locale) }}</p>
+    <p class="text-muted">{{ format_hijri(edition_date, locale) }} · {{ format_date(edition_date, locale) }}</p>
     <nav class="flex flex-wrap items-center gap-4" aria-label="{{ _('site.languages') }}">
       <a class="no-underline" href="/{{ locale }}/search">{{ _("search.nav") }}</a>
       {% if reader %}
@@ -17,12 +17,17 @@
     <a class="masthead-name" href="/{{ locale }}/">{{ _("site.title") }}</a>
     <div class="masthead-rule"></div>
   </div>
-  {% if nav_sections %}
+  {% if nav_sections or site_pages %}
     <nav class="border-t border-line" aria-label="{{ _('site.sections') }}">
       <ul class="mx-auto flex max-w-5xl flex-wrap gap-x-5 gap-y-2 px-6 py-2.5 font-ui text-sm">
         {% for section in nav_sections %}
           <li>
             <a class="no-underline {% if current_section is defined and current_section == section.slug %}font-semibold{% endif %}" href="/{{ locale }}/section/{{ section.slug }}" {% if current_section is defined and current_section == section.slug %}aria-current="page"{% endif %}>{{ section.name }}</a>
+          </li>
+        {% endfor %}
+        {% for item in site_pages %}
+          <li>
+            <a class="no-underline {% if request.url.path == '/' ~ locale ~ '/page/' ~ item.slug %}font-semibold{% endif %}" href="/{{ locale }}/page/{{ item.slug }}" {% if request.url.path == "/" ~ locale ~ "/page/" ~ item.slug %}aria-current="page"{% endif %}>{{ item.title }}</a>
           </li>
         {% endfor %}
       </ul>

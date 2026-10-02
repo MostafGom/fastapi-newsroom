@@ -1,4 +1,4 @@
-"""Staff screens for the media library and the curated homepage."""
+"""Staff screens for the media library."""
 
 import uuid
 from typing import Annotated
@@ -6,11 +6,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
 
-from newsroom.articles.models import ArticleLocalization
-from newsroom.articles.service import ArticleService
-from newsroom.articles.workflow import ArticleStatus
 from newsroom.auth.dependencies import csrf_protect_web
 from newsroom.auth.principal import Principal
 from newsroom.authz.dependencies import CurrentStaff
@@ -19,7 +15,6 @@ from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
-from newsroom.homepage.service import HomepageService
 from newsroom.media.schemas import MediaTranslationIn
 from newsroom.media.service import MediaService
 from newsroom.web.paging import MAX_PAGE, PageQuery, is_fragment, listing_params, pager_context
@@ -202,97 +197,3 @@ async def delete_media(
             _media_back(notice="error", q=q, page=page, detail=exc.detail), status_code=303
         )
     return RedirectResponse(_media_back(notice="saved", q=q, page=page), status_code=303)
-
-
-@router.get("/homepage", response_class=HTMLResponse)
-async def homepage_page(
-    request: Request,
-    staff: CurrentStaff,
-    db: DbSession,
-    locale: str | None = None,
-    page: PageQuery = 1,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
-) -> HTMLResponse:
-    _require(staff, Perm.ARTICLE_PUBLISH)
-    code = locale if locale in get_settings().supported_locales else get_settings().default_locale
-    fragment = is_fragment(request, cursor)
-    found = await ArticleService(db).list_public(
-        code,
-        listing_params(_PAGE, page, fragment, cursor),
-        section_slug=None,
-        tag_slug=None,
-    )
-    curated = await HomepageService(db).public_stories(code) or []
-    positions = {item.summary.slug: index for index, item in enumerate(curated, start=1)}
-    labels = {item.summary.slug: item.label or "" for item in curated}
-    if fragment:
-        pinned_slugs = {item.summary.slug for item in curated}
-        stories = [item for item in found.items if item.slug not in pinned_slugs]
-    else:
-        on_page = {item.slug for item in found.items}
-        pinned = [item.summary for item in curated if item.summary.slug not in on_page]
-        stories = [*pinned, *found.items]
-    return templates.TemplateResponse(
-        request,
-        "admin/fragments/homepage.html" if fragment else "admin/homepage.html",
-        {
-            "staff": staff,
-            "locale": code,
-            "locales": get_settings().supported_locales,
-            "stories": stories,
-            "positions": positions,
-            "labels": labels,
-            **pager_context(
-                path="/admin/homepage",
-                page=page,
-                extra={"locale": code},
-                next_cursor=found.next_cursor,
-                fragment=fragment,
-                prev_key="manage.previous",
-                more_key="manage.more",
-            ),
-        },
-    )
-
-
-@router.post("/homepage")
-async def save_homepage(
-    request: Request, staff: CurrentStaff, db: DbSession, locale: Annotated[str, Form()]
-) -> RedirectResponse:
-    _require(staff, Perm.ARTICLE_PUBLISH)
-    form = await request.form()
-    chosen: list[tuple[int, str]] = []
-    for key, value in form.multi_items():
-        if not key.startswith("pos_") or not isinstance(value, str) or not value.strip():
-            continue
-        try:
-            position = int(value)
-        except ValueError:
-            continue
-        chosen.append((position, key.removeprefix("pos_")))
-    chosen.sort(key=lambda item: item[0])
-    slugs = [slug for _, slug in chosen]
-    rows = list(
-        (
-            await db.scalars(
-                select(ArticleLocalization).where(
-                    ArticleLocalization.locale == locale,
-                    ArticleLocalization.slug.in_(slugs),
-                    ArticleLocalization.status == ArticleStatus.PUBLISHED,
-                )
-            )
-        ).all()
-    )
-    by_slug = {row.slug: row.id for row in rows}
-    ids = [by_slug[slug] for _, slug in chosen if slug in by_slug]
-    labels = []
-    for _, slug in chosen:
-        if slug not in by_slug:
-            continue
-        raw = form.get(f"label_{slug}")
-        labels.append(raw.strip() if isinstance(raw, str) else None)
-    try:
-        await HomepageService(db).replace(staff, locale, ids, labels)
-    except AppError:
-        return RedirectResponse(f"/admin/homepage?locale={locale}&notice=error", status_code=303)
-    return RedirectResponse(f"/admin/homepage?locale={locale}&notice=saved", status_code=303)
