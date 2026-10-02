@@ -34,6 +34,7 @@
   "account.bookmark": "Bookmark",
   "account.saved": "Saved",
   "admin.title": "Newsroom Dashboard",
+  "admin.menu": "Menu",
   "admin.logout": "Log out",
   "admin.login.title": "Staff sign in",
   "admin.login.email": "Email",

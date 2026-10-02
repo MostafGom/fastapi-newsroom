@@ -1,63 +1,90 @@
 {% extends "base.html" %}
 {% block body_class %}desk{% endblock %}
 {% block body %}
-<header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-card px-6 py-3" x-data="{ open: false }">
-  <a class="font-ui text-lg font-semibold text-ink no-underline" href="/admin/">{{ _("admin.title") }}</a>
-  <nav class="flex flex-wrap items-center gap-4 text-sm">
-    {% if principal %}
-      <a href="/admin/stories/new">{{ _("desk.new") }}</a>
-      <a href="/admin/workflow">{{ _("flow.nav") }}</a>
+{% if principal %}
+{% set path = request.url.path %}
+<div class="desk-shell" x-data="{ nav: false }">
+  <div class="desk-nav-backdrop" x-show="nav" x-cloak @click="nav = false"></div>
+  <aside id="desk-nav" class="desk-nav" :class="{ 'is-open': nav }">
+    <a class="desk-brand" href="/admin/"{% if path in ["/admin", "/admin/"] %} aria-current="page"{% endif %}>{{ _("admin.title") }}</a>
+    <nav class="desk-links" aria-label="{{ _('admin.title') }}">
+      <a href="/admin/stories/new"{% if path == "/admin/stories/new" or path.startswith("/admin/stories/new/") %} aria-current="page"{% endif %}>{{ _("desk.new") }}</a>
+      <a href="/admin/workflow"{% if path == "/admin/workflow" or path.startswith("/admin/workflow/") %} aria-current="page"{% endif %}>{{ _("flow.nav") }}</a>
       {% if principal.grants.has_anywhere(perms.MEDIA_UPLOAD) %}
-        <a href="/admin/media">{{ _("media.nav") }}</a>
+        <a href="/admin/media"{% if path == "/admin/media" or path.startswith("/admin/media/") %} aria-current="page"{% endif %}>{{ _("media.nav") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.ARTICLE_PUBLISH) %}
-        <a href="/admin/homepage">{{ _("homepage.nav") }}</a>
+        <a href="/admin/homepage"{% if path == "/admin/homepage" or path.startswith("/admin/homepage/") %} aria-current="page"{% endif %}>{{ _("homepage.nav") }}</a>
+      {% endif %}
+      <a href="/admin/editor"{% if path == "/admin/editor" or path.startswith("/admin/editor/") %} aria-current="page"{% endif %}>{{ _("editor.preview") }}</a>
+      {% if principal.grants.has_anywhere(perms.ARTICLE_CREATE)
+         or principal.grants.has_anywhere(perms.SECTION_MANAGE)
+         or principal.grants.has_anywhere(perms.TAG_MANAGE)
+         or principal.grants.has_anywhere(perms.LOCALE_MANAGE)
+         or principal.grants.has_anywhere(perms.ROLE_MANAGE)
+         or principal.grants.has_anywhere(perms.SETTINGS_MANAGE)
+         or principal.grants.has_anywhere(perms.USER_READ)
+         or principal.grants.has_anywhere(perms.AUDIT_READ) %}
+      <div class="desk-nav-rule"></div>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.ARTICLE_CREATE) %}
-        <a href="/admin/authors">{{ _("manage.authors") }}</a>
+        <a href="/admin/authors"{% if path == "/admin/authors" or path.startswith("/admin/authors/") %} aria-current="page"{% endif %}>{{ _("manage.authors") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.SECTION_MANAGE) %}
-        <a href="/admin/sections">{{ _("manage.sections") }}</a>
+        <a href="/admin/sections"{% if path == "/admin/sections" or path.startswith("/admin/sections/") %} aria-current="page"{% endif %}>{{ _("manage.sections") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.TAG_MANAGE) %}
-        <a href="/admin/tags">{{ _("manage.tags") }}</a>
+        <a href="/admin/tags"{% if path == "/admin/tags" or path.startswith("/admin/tags/") %} aria-current="page"{% endif %}>{{ _("manage.tags") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.LOCALE_MANAGE) %}
-        <a href="/admin/locales">{{ _("manage.locales") }}</a>
+        <a href="/admin/locales"{% if path == "/admin/locales" or path.startswith("/admin/locales/") %} aria-current="page"{% endif %}>{{ _("manage.locales") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.ROLE_MANAGE) %}
-        <a href="/admin/roles">{{ _("manage.roles") }}</a>
+        <a href="/admin/roles"{% if path == "/admin/roles" or path.startswith("/admin/roles/") %} aria-current="page"{% endif %}>{{ _("manage.roles") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.SETTINGS_MANAGE) %}
-        <a href="/admin/settings">{{ _("manage.settings") }}</a>
+        <a href="/admin/settings"{% if path == "/admin/settings" or path.startswith("/admin/settings/") %} aria-current="page"{% endif %}>{{ _("manage.settings") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.USER_READ) %}
-        <a href="/admin/users">{{ _("manage.users") }}</a>
+        <a href="/admin/users"{% if path == "/admin/users" or path.startswith("/admin/users/") %} aria-current="page"{% endif %}>{{ _("manage.users") }}</a>
       {% endif %}
       {% if principal.grants.has_anywhere(perms.AUDIT_READ) %}
-        <a href="/admin/audit">{{ _("manage.audit") }}</a>
+        <a href="/admin/audit"{% if path == "/admin/audit" or path.startswith("/admin/audit/") %} aria-current="page"{% endif %}>{{ _("manage.audit") }}</a>
       {% endif %}
-      <a href="/admin/editor">{{ _("editor.preview") }}</a>
-    {% endif %}
-    <span class="flex gap-3" aria-label="{{ _('site.languages') }}">
-      {% for code in interface_locales %}
-        <a class="no-underline {% if code == locale %}font-semibold{% endif %}" href="/admin/language/{{ code }}?next={{ admin_next }}" {% if code == locale %}aria-current="page"{% endif %}>{{ _("locale." ~ code) }}</a>
-      {% endfor %}
-    </span>
-    {% if principal %}
-    <div class="relative">
-      <button class="btn-quiet" type="button" @click="open = !open" :aria-expanded="open">{{ principal.user.display_name or principal.user.email }}</button>
-      <div class="absolute end-0 z-10 mt-1 border border-line bg-card p-2" x-show="open" x-cloak @click.outside="open = false">
-        <form method="post" action="/admin/logout">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="btn-quiet" type="submit">{{ _("admin.logout") }}</button>
-        </form>
-      </div>
+    </nav>
+    <div class="desk-nav-foot">
+      <span class="desk-locales" aria-label="{{ _('site.languages') }}">
+        {% for code in interface_locales %}
+          <a class="no-underline {% if code == locale %}font-semibold{% endif %}" href="/admin/language/{{ code }}?next={{ admin_next }}" {% if code == locale %}aria-current="page"{% endif %}>{{ _("locale." ~ code) }}</a>
+        {% endfor %}
+      </span>
+      <p class="desk-user">{{ principal.user.display_name or principal.user.email }}</p>
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn-quiet" type="submit">{{ _("admin.logout") }}</button>
+      </form>
     </div>
-    {% endif %}
-  </nav>
+  </aside>
+  <div class="desk-main">
+    <header class="desk-bar">
+      <button class="desk-nav-toggle" type="button" @click="nav = !nav" :aria-expanded="nav" aria-controls="desk-nav">{{ _("admin.menu") }}</button>
+      <a class="desk-bar-title no-underline" href="/admin/">{{ _("admin.title") }}</a>
+    </header>
+    <main class="desk-content">
+{% else %}
+<header class="flex items-center justify-end gap-3 border-b border-line bg-card px-6 py-3 text-sm">
+  <span class="flex gap-3" aria-label="{{ _('site.languages') }}">
+    {% for code in interface_locales %}
+      <a class="no-underline {% if code == locale %}font-semibold{% endif %}" href="/admin/language/{{ code }}?next={{ admin_next }}" {% if code == locale %}aria-current="page"{% endif %}>{{ _("locale." ~ code) }}</a>
+    {% endfor %}
+  </span>
 </header>
 <main class="mx-auto max-w-5xl px-6 py-6">
+{% endif %}
   {% block content %}{% endblock %}
 </main>
+{% if principal %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

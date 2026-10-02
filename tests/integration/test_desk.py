@@ -205,3 +205,23 @@ async def test_new_story_stores_the_lead_image(
     assert refused.status_code == 404
     assert str(missing) in refused.text
     assert "Media not found" in refused.text
+
+
+async def test_desk_sidebar_is_signed_in_only(
+    client: AsyncClient, make_staff: MakeStaff
+) -> None:
+    login = await client.get("/admin/login")
+    assert login.status_code == 200
+    assert "desk-nav" not in login.text
+
+    await _login(client, await make_staff("writer"))
+    desk = await client.get("/admin/")
+    assert desk.status_code == 200
+    assert 'id="desk-nav"' in desk.text
+    assert 'href="/admin/" aria-current="page"' in desk.text
+    assert 'href="/admin/workflow"' in desk.text
+    assert 'href="/admin/workflow" aria-current="page"' not in desk.text
+
+    flow = await client.get("/admin/workflow")
+    assert flow.status_code == 200
+    assert 'href="/admin/workflow" aria-current="page"' in flow.text
