@@ -220,6 +220,7 @@
   "media.credit": "Credit",
   "media.caption": "Caption",
   "media.alt": "Alt text",
+  "media.generated": "On upload, AI generates alt text and a caption in Arabic and English. Edit them if they are wrong, or write them yourself when the fields stay empty.",
   "media.empty": "No images yet.",
   "media.no_match": "No images with that name.",
   "media.saved": "Saved.",

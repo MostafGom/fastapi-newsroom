@@ -55,6 +55,7 @@ async def test_media_homepage_comments_and_briefing(client: AsyncClient, db: Asy
     assert asset["width"] == 1
     assert asset["mime_type"] == "image/png"
     assert asset["filename"] == "dot.png"
+    assert asset["translations"] == []
     renamed = await client.put(
         f"/api/v1/admin/media/{asset['id']}/name",
         json={"filename": "../../chamber photo.png"},

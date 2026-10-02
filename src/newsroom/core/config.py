@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_from: str | None = None
 
+    openrouter_api_key: SecretStr | None = None
+    openrouter_model: str = "google/gemini-2.5-flash"
+    openrouter_timeout_seconds: int = 20
+
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
