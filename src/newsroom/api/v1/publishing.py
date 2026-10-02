@@ -10,10 +10,10 @@ from newsroom.authz.dependencies import CurrentStaff, require_permission, requir
 from newsroom.authz.permissions import Perm
 from newsroom.core.db import DbSession
 from newsroom.core.schemas import PROBLEM_RESPONSES
-from newsroom.homepage.schemas import HomepageUpdate
-from newsroom.homepage.service import HomepageService
 from newsroom.media.schemas import MediaNameIn, MediaOut, MediaTranslationIn
 from newsroom.media.service import MediaService
+from newsroom.pages.schemas import PageAdminOut, PageCreate, PageTranslationIn
+from newsroom.pages.service import PageService
 
 router = APIRouter(
     prefix="/admin",
@@ -69,12 +69,36 @@ async def set_article_lead(
     await ArticleService(db).set_lead(staff, article_id, payload.media_id)
 
 
-@router.put(
-    "/homepage",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=can(Perm.ARTICLE_PUBLISH),
+@router.get("/pages", response_model=list[PageAdminOut], dependencies=can(Perm.PAGE_MANAGE))
+async def list_pages(staff: CurrentStaff, db: DbSession) -> list[PageAdminOut]:
+    return await PageService(db).list_admin(staff)
+
+
+@router.post(
+    "/pages",
+    response_model=PageAdminOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=can(Perm.PAGE_MANAGE),
 )
-async def set_homepage(payload: HomepageUpdate, staff: CurrentStaff, db: DbSession) -> None:
-    await HomepageService(db).replace(
-        staff, payload.locale, payload.localization_ids, payload.labels
-    )
+async def create_page(payload: PageCreate, staff: CurrentStaff, db: DbSession) -> PageAdminOut:
+    return await PageService(db).create(staff, payload)
+
+
+@router.put(
+    "/pages/{page_id}/translations",
+    response_model=PageAdminOut,
+    dependencies=can(Perm.PAGE_MANAGE),
+)
+async def save_page_translation(
+    page_id: uuid.UUID, payload: PageTranslationIn, staff: CurrentStaff, db: DbSession
+) -> PageAdminOut:
+    return await PageService(db).save_translation(staff, page_id, payload)
+
+
+@router.delete(
+    "/pages/{page_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=can(Perm.PAGE_MANAGE),
+)
+async def delete_page(page_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> None:
+    await PageService(db).delete(staff, page_id)

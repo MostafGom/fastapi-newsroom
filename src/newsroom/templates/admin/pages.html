@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("pages.heading") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold">{{ _("pages.heading") }}</h1>
+<p class="lede">{{ _("guide.pages") }}</p>
+{% include "admin/partials/notice.html" %}
+<form class="form panel my-4" method="post" action="/admin/pages">
+  <h2 class="font-bold">{{ _("pages.create") }}</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field">{{ _("manage.key") }}
+    <input name="key" required dir="ltr" pattern="[a-z0-9_-]+">
+  </label>
+  <label class="field">{{ _("manage.sort") }}
+    <input name="sort_order" type="number" value="0" dir="ltr">
+  </label>
+  <button class="btn" type="submit">{{ _("pages.create") }}</button>
+</form>
+{% if pages %}
+  <ul class="grid gap-3">
+    {% for page in pages %}
+      <li class="panel">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h2 dir="ltr">{{ page.key }}</h2>
+            <p class="lede">
+              {%- for item in page.translations -%}
+                {%- if not loop.first %} · {% endif -%}
+                {{ _("locale." ~ item.locale) }}: {{ item.title }}
+                ({{ _("pages.published") if item.status == "published" else _("pages.draft") }})
+              {%- else -%}
+                {{ _("pages.empty_translation") }}
+              {%- endfor -%}
+            </p>
+          </div>
+          <a class="btn-line" href="/admin/pages/{{ page.id }}">{{ _("manage.edit") }}</a>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted">{{ _("pages.empty") }}</p>
+{% endif %}
+{% endblock %}

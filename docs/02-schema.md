@@ -251,8 +251,9 @@ Weights: title A, excerpt B, body C, tags and bylines D. Text queries sort by ra
 Files are stored on disk under `MEDIA_DIR`. `/media/{id}` serves a 1600px JPEG for display. `/media/{id}/original` serves the uploaded file.
 `media_translations(media_id, locale, caption, alt_text)`.
 
-### `homepage_slots`
-`(locale, position)` primary key, `localization_id` of a published story, optional `label`. Empty means the home page lists the latest stories.
+### `pages` / `page_translations`
+`pages(id, key, sort_order, created_at, updated_at)`. `key` is a stable desk id (`[a-z0-9_-]+`).
+`page_translations(id, page_id, locale, slug, title, body, body_html, status)`. `body` is a TipTap document; `body_html` is the sanitized render. `status` is `draft` or `published`. Unique `(page_id, locale)` and `(locale, slug)`. The public home does not read this table: it lists published stories by date. A published translation is `/{locale}/page/{slug}` and a footer link.
 
 ### `newsletter_issues` / `newsletter_deliveries`
 One issue per locale per day (`edition_date`), with the story slugs it contained.

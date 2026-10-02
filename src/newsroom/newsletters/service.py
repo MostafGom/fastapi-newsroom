@@ -15,7 +15,6 @@ from newsroom.auth.service import utcnow
 from newsroom.core.config import Settings, get_settings
 from newsroom.core.i18n import translate
 from newsroom.core.schemas import PageParams
-from newsroom.homepage.service import HomepageService
 from newsroom.newsletters.models import NewsletterDelivery, NewsletterIssue
 from newsroom.users.models import ReaderProfile, User, UserStatus
 
@@ -54,14 +53,10 @@ class NewsletterService:
         )
         if existing is not None:
             return 0
-        curated = await HomepageService(self.db).public_stories(locale)
-        if curated is None:
-            page = await ArticleService(self.db).list_public(
-                locale, PageParams(limit=5, cursor=None), section_slug=None, tag_slug=None
-            )
-            stories = page.items
-        else:
-            stories = [item.summary for item in curated[:5]]
+        page = await ArticleService(self.db).list_public(
+            locale, PageParams(limit=5, cursor=None), section_slug=None, tag_slug=None
+        )
+        stories = page.items
         if not stories:
             return 0
         readers = list(

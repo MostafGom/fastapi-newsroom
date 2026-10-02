@@ -96,7 +96,9 @@ the JSON API over HTTP.
 | POST | `/media` | `media.upload` | Upload a JPEG, PNG, GIF, or WebP (8MB) |
 | PUT | `/media/{id}/translations` | `media.upload` | Caption and alt text for one locale |
 | PUT | `/articles/{id}/lead` | edit or own | Set or clear the lead image (`media_id`) |
-| PUT | `/homepage` | `article.publish` | Replace a locale's homepage order (`localization_ids`, optional `labels`) |
+| GET/POST | `/pages` | `page.manage` | List and create site pages (`key`, `sort_order`) |
+| PUT | `/pages/{id}/translations` | `page.manage` | Upsert one locale (`title`, `slug`, TipTap `body`, `status`) |
+| DELETE | `/pages/{id}` | `page.manage` | Delete a page and its translations |
 | POST | `/localizations/{id}/legal-hold` | `article.review` | Block schedule and publish. Reason required |
 | POST | `/localizations/{id}/legal-hold/clear` | `article.clear_legal` | Record counsel's clearance. Reason required |
 | POST | `/localizations/{id}/purge` | `article.purge` | Hard-remove one language edition. Reason required. The audit row keeps the identifiers |
@@ -121,12 +123,14 @@ exactly as requested.
 | `/{locale}/section/{slug}` | Section listing |
 | `/{locale}/tag/{slug}` | Tag listing |
 | `/{locale}/article/{slug}` | Article page |
+| `/{locale}/page/{slug}` | Published site page |
 | `/{locale}/login`, `/{locale}/register`, `/{locale}/account` | Reader account |
 | `/admin/login`, `/admin/logout` | Staff auth |
 | `/admin/` | Dashboard |
 | `/admin/articles`, `/admin/articles/{id}`, `/admin/localizations/{id}/edit` | Editorial |
 | `/admin/sections`, `/admin/tags`, `/admin/users`, `/admin/audit` | Management |
-| `/admin/media`, `/admin/homepage` | Media library and homepage order |
+| `/admin/media` | Media library |
+| `/admin/pages` | Site pages |
 | `/admin/authors`, `/admin/locales`, `/admin/roles`, `/admin/settings` | Bylines, languages, custom roles, site settings |
 | `/media/{id}` | Uploaded image |
 

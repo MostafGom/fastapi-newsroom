@@ -87,9 +87,22 @@ and can be revoked immediately.
 |---|---|
 | `demo-super@example.com` | Super admin |
 | `demo-editor@example.com` | Editor on the politics desk |
+| `demo-editor-sports@example.com` | Editor on the sports desk |
+| `demo-editor-economy@example.com` | Editor on the economy desk |
+| `demo-editor-science@example.com` | Editor on the science desk |
+| `demo-editor-culture@example.com` | Editor on the culture desk |
 | `demo-copy@example.com` | Copy editor |
-| `demo-writer@example.com` | Writer |
-| `demo-reader@example.com` | Reader: profile and bookmarks |
+| `demo-writer@example.com` | Writer on the politics desk |
+| `demo-writer-sports@example.com` | Writer on the sports desk |
+| `demo-writer-economy@example.com` | Writer on the economy desk |
+| `demo-writer-science@example.com` | Writer on the science desk |
+| `demo-writer-culture@example.com` | Writer on the culture desk |
+| `demo-reader@example.com` | Reader: profile, bookmarks, and comments |
+| `demo-reader-yusuf@example.com` | Reader |
+| `demo-reader-sara@example.com` | Reader |
+| `demo-reader-leila@example.com` | Reader |
+| `demo-reader-fadi@example.com` | Reader |
+| `demo-reader-huda@example.com` | Reader |
 
 The same command publishes one fixture story in Arabic and English, leaves one story in review, and schedules one to publish six hours later. It then publishes about 100 original demo briefs (Arabic and English) across five desks so the dev lists are long enough to page. Those briefs are not copied from another publication. Running the command again does not duplicate accounts or stories. Tests call only the three fixtures, not the extra briefs. An existing super admin such as `admin@example.com` is left unchanged. Staff accounts sign in at `/admin/login`. The reader account signs in at `/ar/login` or `/en/login`.
 
@@ -139,11 +152,11 @@ transactions and write audit events in the same transaction as the change.
 ## Status
 
 Phases 1–3 are in the application: identity and the desk, the public site, search,
-media, homepage curation, the daily briefing, and reader comments.
+media, site pages, the daily briefing, and reader comments.
 
-Cursor pagination covers reader search, section and tag lists, and the latest-story
-home when no homepage slots are set. On the desk it covers the story list, the media
-library, the homepage picker, accounts, tags, and the audit log. The JSON API keeps
+Cursor pagination covers reader search, section and tag lists, and the home page,
+which lists published stories by date. On the desk it covers the story list, the media
+library, accounts, tags, and the audit log. Site pages are one list. The JSON API keeps
 the opaque cursor. HTML lists use `?page=2` and append the next page in place, with
 previous and next on that same page. Languages and roles stay one page. Desk search
 is not built. The public search index covers published stories only.

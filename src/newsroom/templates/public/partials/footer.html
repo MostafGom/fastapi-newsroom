@@ -1,3 +1,12 @@
 <footer class="mt-16 border-t border-line">
-  <p class="mx-auto max-w-5xl px-6 py-5 font-ui text-sm text-muted">{{ _("site.title") }}</p>
+  <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-5 font-ui text-sm">
+    <p class="text-muted">{{ _("site.title") }}</p>
+    {% if site_pages %}
+      <nav class="flex flex-wrap gap-4" aria-label="{{ _('pages.nav') }}">
+        {% for item in site_pages %}
+          <a class="no-underline" href="/{{ locale }}/page/{{ item.slug }}" {% if request.url.path == "/" ~ locale ~ "/page/" ~ item.slug %}aria-current="page"{% endif %}>{{ item.title }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </div>
 </footer>

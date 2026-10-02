@@ -17,10 +17,10 @@ from newsroom.auth.models import AuthSession
 from newsroom.authz.models import Permission, Role, UserRole, role_permissions
 from newsroom.comments.models import Comment
 from newsroom.core.models import Base
-from newsroom.homepage.models import HomepageSlot
 from newsroom.locales.models import Locale
 from newsroom.media.models import MediaAsset, MediaTranslation
 from newsroom.newsletters.models import NewsletterDelivery, NewsletterIssue
+from newsroom.pages.models import Page, PageTranslation
 from newsroom.search.models import SearchDocument
 from newsroom.settings.models import SiteSettings
 from newsroom.taxonomy.models import Section, SectionTranslation, Tag, TagTranslation
@@ -40,12 +40,13 @@ __all__ = [
     "Bookmark",
     "Comment",
     "Correction",
-    "HomepageSlot",
     "Locale",
     "MediaAsset",
     "MediaTranslation",
     "NewsletterDelivery",
     "NewsletterIssue",
+    "Page",
+    "PageTranslation",
     "Permission",
     "ReaderProfile",
     "Role",

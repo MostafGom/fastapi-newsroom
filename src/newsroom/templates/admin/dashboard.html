@@ -35,8 +35,8 @@
       {% if staff.grants.has_anywhere(perms.MEDIA_UPLOAD) %}
         <li><a href="/admin/media"><strong>{{ _("media.nav") }}</strong><span class="lede">{{ _("guide.media") }}</span></a></li>
       {% endif %}
-      {% if staff.grants.has_anywhere(perms.ARTICLE_PUBLISH) %}
-        <li><a href="/admin/homepage"><strong>{{ _("homepage.nav") }}</strong><span class="lede">{{ _("guide.homepage") }}</span></a></li>
+      {% if staff.grants.has_anywhere(perms.PAGE_MANAGE) %}
+        <li><a href="/admin/pages"><strong>{{ _("pages.nav") }}</strong><span class="lede">{{ _("guide.pages") }}</span></a></li>
       {% endif %}
       {% if staff.grants.has_anywhere(perms.SECTION_MANAGE) %}
         <li><a href="/admin/sections"><strong>{{ _("manage.sections") }}</strong><span class="lede">{{ _("guide.sections") }}</span></a></li>

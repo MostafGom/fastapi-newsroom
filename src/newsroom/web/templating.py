@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from hijridate import Gregorian
 
 from newsroom.auth.dependencies import ensure_csrf_token
 from newsroom.authz.permissions import Perm
@@ -49,6 +50,34 @@ _MONTHS_AR = (
     "نوفمبر",
     "ديسمبر",
 )
+_HIJRI_MONTHS_EN = (
+    "Muharram",
+    "Safar",
+    "Rabi al-Awwal",
+    "Rabi al-Thani",
+    "Jumada al-Ula",
+    "Jumada al-Thani",
+    "Rajab",
+    "Shaban",
+    "Ramadan",
+    "Shawwal",
+    "Dhu al-Qidah",
+    "Dhu al-Hijjah",
+)
+_HIJRI_MONTHS_AR = (
+    "محرم",
+    "صفر",
+    "ربيع الأول",
+    "ربيع الآخر",
+    "جمادى الأولى",
+    "جمادى الآخرة",
+    "رجب",
+    "شعبان",
+    "رمضان",
+    "شوال",
+    "ذو القعدة",
+    "ذو الحجة",
+)
 
 
 def _asset_version() -> str:
@@ -64,6 +93,15 @@ def format_date(value: datetime | date | None, locale: str) -> str:
         return ""
     names = _MONTHS_AR if locale.split("-", 1)[0] == "ar" else _MONTHS_EN
     return f"{value.day} {names[value.month - 1]} {value.year}"
+
+
+def format_hijri(value: datetime | date | None, locale: str) -> str:
+    """Umm al-Qura date for the same civil day as ``format_date``."""
+    if value is None:
+        return ""
+    hijri = Gregorian(value.year, value.month, value.day).to_hijri()
+    names = _HIJRI_MONTHS_AR if locale.split("-", 1)[0] == "ar" else _HIJRI_MONTHS_EN
+    return f"{hijri.day} {names[hijri.month - 1]} {hijri.year}"
 
 
 def _enabled_locales(request: Request) -> list[str]:
@@ -115,8 +153,10 @@ def _context(request: Request) -> dict[str, Any]:
         "locale_names": getattr(request.state, "locale_names", {}) or {},
         "registration_open": getattr(request.state, "registration_open", True),
         "nav_sections": getattr(request.state, "nav_sections", []),
+        "site_pages": getattr(request.state, "site_pages", []),
         "edition_date": datetime.now(UTC).date(),
         "format_date": format_date,
+        "format_hijri": format_hijri,
         "csrf_token": ensure_csrf_token(request),
         "principal": getattr(request.state, "principal", None),
         "perms": Perm,

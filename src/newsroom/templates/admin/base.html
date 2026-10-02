@@ -13,8 +13,8 @@
       {% if principal.grants.has_anywhere(perms.MEDIA_UPLOAD) %}
         <a href="/admin/media"{% if path == "/admin/media" or path.startswith("/admin/media/") %} aria-current="page"{% endif %}>{{ _("media.nav") }}</a>
       {% endif %}
-      {% if principal.grants.has_anywhere(perms.ARTICLE_PUBLISH) %}
-        <a href="/admin/homepage"{% if path == "/admin/homepage" or path.startswith("/admin/homepage/") %} aria-current="page"{% endif %}>{{ _("homepage.nav") }}</a>
+      {% if principal.grants.has_anywhere(perms.PAGE_MANAGE) %}
+        <a href="/admin/pages"{% if path == "/admin/pages" or path.startswith("/admin/pages/") %} aria-current="page"{% endif %}>{{ _("pages.nav") }}</a>
       {% endif %}
       <a href="/admin/editor"{% if path == "/admin/editor" or path.startswith("/admin/editor/") %} aria-current="page"{% endif %}>{{ _("editor.preview") }}</a>
       {% if principal.grants.has_anywhere(perms.ARTICLE_CREATE)
@@ -23,6 +23,7 @@
          or principal.grants.has_anywhere(perms.LOCALE_MANAGE)
          or principal.grants.has_anywhere(perms.ROLE_MANAGE)
          or principal.grants.has_anywhere(perms.SETTINGS_MANAGE)
+         or principal.grants.has_anywhere(perms.PAGE_MANAGE)
          or principal.grants.has_anywhere(perms.USER_READ)
          or principal.grants.has_anywhere(perms.AUDIT_READ) %}
       <div class="desk-nav-rule"></div>
