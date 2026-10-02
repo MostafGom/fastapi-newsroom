@@ -1,6 +1,13 @@
 import pytest
 
-from newsroom.core.i18n import TextDirection, locale_info, negotiate_locale, parse_accept_language
+from newsroom.core.i18n import (
+    TextDirection,
+    interface_locales,
+    locale_info,
+    negotiate_locale,
+    ordered_locales,
+    parse_accept_language,
+)
 from newsroom.core.schemas import InvalidCursor, decode_cursor, encode_cursor
 from newsroom.core.security import (
     csrf_token_is_valid,
@@ -60,3 +67,8 @@ def test_negotiate_locale(requested: str | None, header: str | None, expected: s
 def test_locale_direction() -> None:
     assert locale_info("ar").direction is TextDirection.RTL
     assert locale_info("en").direction is TextDirection.LTR
+
+
+def test_default_locale_is_listed_first() -> None:
+    assert ordered_locales(["en", "ar"], "ar") == ["ar", "en"]
+    assert interface_locales(["en", "ar", "fr"], "ar") == ["ar", "en"]

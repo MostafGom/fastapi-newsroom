@@ -2,7 +2,7 @@ import json
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from newsroom.articles.body import InvalidBody, render_body
@@ -18,6 +18,7 @@ from newsroom.auth.schemas import Audience
 from newsroom.auth.service import AuthService, InvalidCredentials
 from newsroom.authz.dependencies import CurrentStaff
 from newsroom.core.db import DbSession
+from newsroom.core.i18n import UI_LOCALE_COOKIE, interface_locales
 from newsroom.web.admin.desk import story_rows
 from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
@@ -76,6 +77,32 @@ async def login_submit(
     else:
         response = RedirectResponse(destination, status_code=303)
     set_session_cookie(response, settings, Audience.STAFF, issued.token, issued.session.expires_at)
+    return response
+
+
+@router.get("/language/{code}")
+async def switch_language(
+    code: str,
+    request: Request,
+    settings: SettingsDep,
+    db: DbSession,
+    next: str | None = None,
+) -> RedirectResponse:
+    """Remember the dashboard language. ``db`` loads the enabled locale list for this request."""
+    enabled = list(getattr(request.state, "enabled_locales", None) or settings.supported_locales)
+    default = getattr(request.state, "default_locale", None) or settings.default_locale
+    if code not in interface_locales(enabled, default):
+        raise HTTPException(status_code=404)
+    response = RedirectResponse(safe_next(next), status_code=303)
+    response.set_cookie(
+        UI_LOCALE_COOKIE,
+        code,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/admin",
+    )
     return response
 
 
