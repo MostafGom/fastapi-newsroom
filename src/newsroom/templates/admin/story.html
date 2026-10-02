@@ -24,30 +24,26 @@
     {% endfor %}
   </nav>
 {% endif %}
-<section class="panel mb-4" x-data="{ id: '{{ article.lead_media_id or '' }}' }"
-         @click="const pick = $event.target.closest('[data-pick]'); if (!pick || pick.disabled) return; id = pick.dataset.pick; $el.querySelectorAll('.is-selected').forEach((el) => el.classList.remove('is-selected')); pick.classList.add('is-selected')">
+<section class="panel mb-4">
   <h2>{{ _("media.lead") }}</h2>
   <p class="lede mb-3">{{ _("guide.lead") }}</p>
   <form method="post" action="/admin/stories/{{ story.id }}/lead">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="media_id" value="{{ article.lead_media_id or '' }}" :value="id">
-    <img class="lead-preview mb-3" x-cloak x-show="id" :src="id ? '/media/' + id : ''" alt="">
-    <button class="btn-quiet" type="button" @click="id = ''" x-cloak x-show="id">{{ _("media.none") }}</button>
+    <input type="hidden" name="media_id" id="lead-media-id" value="{{ article.lead_media_id or '' }}">
+    <img id="lead-preview" class="lead-preview mb-3" alt=""
+         {% if article.lead_media_id %}src="/media/{{ article.lead_media_id }}"{% else %}hidden{% endif %}>
     <div class="form-actions">
+      <button class="btn-line" type="button" data-lead-picker
+              data-locale="{{ story.locale }}"
+              data-input="lead-media-id"
+              data-preview="lead-preview">{{ _("media.choose") }}</button>
+      <button class="btn-quiet" type="button" data-lead-clear
+              data-input="lead-media-id"
+              data-preview="lead-preview"
+              {% if not article.lead_media_id %}hidden{% endif %}>{{ _("media.none") }}</button>
       <button class="btn-line" type="submit">{{ _("media.save") }}</button>
     </div>
   </form>
-  <label class="field mt-3">{{ _("media.filename") }}
-    <input id="lead-query" name="q" maxlength="200"
-           hx-get="/admin/media/picker"
-           hx-target="#lead-choices"
-           hx-trigger="keyup changed delay:300ms"
-           hx-include="#lead-query"
-           hx-vals='{"mode": "lead", "locale": "{{ story.locale }}"}'>
-  </label>
-  <div id="lead-choices" class="mt-3"
-       hx-get="/admin/media/picker?mode=lead&amp;locale={{ story.locale }}"
-       hx-trigger="load"></div>
 </section>
 {% if story.status.value == "published" %}
   <p class="mb-4 text-sm"><a href="/{{ story.locale }}/article/{{ story.slug }}">{{ _("desk.public") }}</a></p>
@@ -143,65 +139,119 @@
   {% endif %}
 </section>
 {% endif %}
-<section class="panel mt-5">
+<section class="panel mt-5" x-data="{ action: '', reason: false, schedule: false }">
   <h2>{{ _("desk.actions") }}</h2>
   <p class="lede">{{ _("guide.actions") }}</p>
-  {% if actions %}
-    <form class="form mt-3" method="post" action="/admin/stories/{{ story.id }}/transition">
+  <div class="move-parts">
+  {% if action_groups %}
+    {% set move = namespace(reason=false, schedule=false) %}
+    {% for group in action_groups %}
+      {% for step in group.steps %}
+        {% if step.requires_reason %}{% set move.reason = true %}{% endif %}
+        {% if step.needs_schedule %}{% set move.schedule = true %}{% endif %}
+      {% endfor %}
+    {% endfor %}
+    <section class="move-part">
+    <form class="form" method="post" action="/admin/stories/{{ story.id }}/transition">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="lock_version" value="{{ story.lock_version }}">
-      <label class="field">{{ _("desk.actions") }}
-        <select name="action" required>
-          {% for action in actions %}
-            <option value="{{ action.value }}">{{ _("desk.action." ~ action.value) }}</option>
+      {% for group in action_groups %}
+        <fieldset class="move-group{% if group.key == 'stop' %} is-stop{% endif %}">
+          <legend>{{ _("desk.group." ~ group.key) }}</legend>
+          <p class="lede">{{ _("desk.group." ~ group.key ~ "_help") }}</p>
+          {% for step in group.steps %}
+            <label class="check">
+              <input type="radio" name="action" value="{{ step.value }}" required
+                     @change="action = '{{ step.value }}'; reason = {{ 'true' if step.requires_reason else 'false' }}; schedule = {{ 'true' if step.needs_schedule else 'false' }}">
+              {{ _("desk.action." ~ step.value) }}
+            </label>
+            <p class="move-help" x-show="action === '{{ step.value }}'" x-cloak>{{ _("desk.help." ~ step.value) }}</p>
           {% endfor %}
-        </select>
-      </label>
-      <label class="field">{{ _("desk.reason") }}
-        <textarea name="reason" rows="2"></textarea>
-      </label>
-      <label class="field">{{ _("desk.publish_at") }}
-        <input type="datetime-local" name="publish_at">
-      </label>
-      <label class="field">{{ _("desk.unpublish_at") }}
-        <input type="datetime-local" name="unpublish_at">
-      </label>
-      <label class="field">{{ _("desk.takedown_label") }}
-        <select name="takedown_reason">
-          <option value=""></option>
-          {% for reason in takedown_reasons %}
-            <option value="{{ reason.value }}">{{ _("desk.takedown." ~ reason.value) }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <button class="btn" type="submit">{{ _("desk.apply") }}</button>
+        </fieldset>
+      {% endfor %}
+      {% if move.reason %}
+        <label class="field" x-show="reason" x-cloak>{{ _("desk.reason") }}
+          <textarea name="reason" rows="2" :required="reason" :disabled="!reason"></textarea>
+        </label>
+      {% endif %}
+      {% if move.schedule %}
+        <label class="field" x-show="schedule" x-cloak>{{ _("desk.publish_at") }}
+          <input type="datetime-local" name="publish_at" :required="schedule" :disabled="!schedule">
+        </label>
+        <label class="field" x-show="schedule" x-cloak>{{ _("desk.unpublish_at") }}
+          <input type="datetime-local" name="unpublish_at" :disabled="!schedule">
+        </label>
+      {% endif %}
+      <div class="form-actions">
+        <button class="btn" type="submit" x-show="action !== 'kill' && action !== 'delete'">{{ _("desk.apply") }}</button>
+        <button class="btn-danger" type="submit" x-show="action === 'kill' || action === 'delete'" x-cloak>{{ _("desk.apply") }}</button>
+      </div>
     </form>
-  {% else %}
+    </section>
+  {% elif not can_unpublish %}
     <p class="mt-2 text-muted">{{ _("desk.none_for_you") }}</p>
   {% endif %}
   {% if can_hold or can_clear_hold %}
-    <form class="form mt-4" method="post"
-          action="/admin/stories/{{ story.id }}/legal-hold{% if can_clear_hold %}/clear{% endif %}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label class="field">{{ _("desk.legal_reason") }}
-        <textarea name="reason" rows="2" required></textarea>
-      </label>
-      <button class="btn-line" type="submit">
-        {{ _("desk.clear_hold") if can_clear_hold else _("desk.hold") }}
-      </button>
-    </form>
+    <section class="move-part">
+      <article class="move-card">
+        <h3>{{ _("desk.hold") }}</h3>
+        <p>{{ _("desk.card.hold") }}</p>
+        <form class="form mt-3" method="post"
+              action="/admin/stories/{{ story.id }}/legal-hold{% if can_clear_hold %}/clear{% endif %}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label class="field">{{ _("desk.legal_reason") }}
+            <textarea name="reason" rows="2" required></textarea>
+          </label>
+          <button class="btn-line" type="submit">
+            {{ _("desk.clear_hold") if can_clear_hold else _("desk.hold") }}
+          </button>
+        </form>
+      </article>
+    </section>
   {% endif %}
-  {% if can_purge %}
-    <form class="form mt-4" method="post" action="/admin/stories/{{ story.id }}/purge">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <p class="text-sm">{{ _("desk.purge_warning") }}</p>
-      <label class="field">{{ _("desk.legal_reason") }}
-        <textarea name="reason" rows="2" required></textarea>
-      </label>
-      <button class="btn-danger" type="submit">{{ _("desk.purge") }}</button>
-    </form>
+  {% if can_unpublish %}
+    <section class="move-part">
+      <article class="move-card is-stop" x-data="{ code: '' }">
+        <h3>{{ _("desk.action.unpublish") }}</h3>
+        <p>{{ _("desk.card.takedown") }}</p>
+        <form class="form mt-3" method="post" action="/admin/stories/{{ story.id }}/transition">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="lock_version" value="{{ story.lock_version }}">
+          <input type="hidden" name="action" value="unpublish">
+          <label class="field">{{ _("desk.reason") }}
+            <textarea name="reason" rows="2" required></textarea>
+          </label>
+          <label class="field">{{ _("desk.takedown_label") }}
+            <select name="takedown_reason" required @change="code = $el.value">
+              <option value=""></option>
+              {% for reason in takedown_reasons %}
+                <option value="{{ reason.value }}">{{ _("desk.takedown." ~ reason.value) }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <p class="move-note" x-show="code === 'legal'" x-cloak>{{ _("desk.card.takedown_legal") }}</p>
+          <button class="btn-danger" type="submit">{{ _("desk.action.unpublish") }}</button>
+        </form>
+      </article>
+    </section>
   {% endif %}
+  </div>
 </section>
+{% if can_purge %}
+  <section class="panel mt-5">
+    <article class="move-card is-stop">
+      <h3>{{ _("desk.purge") }}</h3>
+      <p>{{ _("desk.purge_warning") }}</p>
+      <form class="form mt-3" method="post" action="/admin/stories/{{ story.id }}/purge">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="field">{{ _("desk.legal_reason") }}
+          <textarea name="reason" rows="2" required></textarea>
+        </label>
+        <button class="btn-danger" type="submit">{{ _("desk.purge") }}</button>
+      </form>
+    </article>
+  </section>
+{% endif %}
 <section class="panel mt-5">
   <h2>{{ _("desk.history") }}</h2>
   <p class="lede">{{ _("guide.history") }}</p>

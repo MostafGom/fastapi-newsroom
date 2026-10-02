@@ -378,7 +378,8 @@ async def test_story_picks_images_from_the_library(
     assert story.status_code == 200
     assert '<select name="media_id">' not in story.text
     assert 'name="media_id"' in story.text
-    assert "/admin/media/picker?mode=lead" in story.text
+    assert "data-lead-picker" in story.text
+    assert "/admin/media/picker?mode=lead" not in story.text
     assert 'id="body-media"' in story.text
     assert 'id="body-media-upload"' in story.text
     assert 'id="body-media-file"' in story.text

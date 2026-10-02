@@ -118,6 +118,11 @@ class ArticleService:
 
     async def create(self, actor: Principal, payload: ArticleCreate) -> ArticleAdminOut:
         self._require(actor, Perm.ARTICLE_CREATE, payload.section_id)
+        if (
+            payload.lead_media_id is not None
+            and await self.db.get(MediaAsset, payload.lead_media_id) is None
+        ):
+            raise NotFound("Media not found")
         article = Article(
             section_id=payload.section_id,
             article_type=payload.article_type,
