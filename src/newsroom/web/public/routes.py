@@ -19,14 +19,16 @@ from newsroom.comments.service import CommentService
 from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import NotFound
-from newsroom.core.schemas import PageParams
 from newsroom.homepage.service import HomepageService
 from newsroom.media.service import MediaService
 from newsroom.search.schemas import SearchFilters
 from newsroom.search.service import SearchService
 from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.service import UserService
+from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
+
+_PAGE = 20
 
 router = APIRouter(dependencies=[Depends(csrf_protect_web)], include_in_schema=False)
 
@@ -68,20 +70,48 @@ async def root(request: Request, db: DbSession) -> RedirectResponse:
 
 @router.get("/{locale}/", response_class=HTMLResponse)
 async def home(
-    request: Request, locale: LocaleParam, reader: OptionalReader, db: DbSession
+    request: Request,
+    locale: LocaleParam,
+    reader: OptionalReader,
+    db: DbSession,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
     curated = await HomepageService(db).public_stories(locale)
     labels: dict[str, str] = {}
+    fragment = False
+    next_cursor = None
     if curated is None:
-        page = await ArticleService(db).list_public(
-            locale, PageParams(limit=20, cursor=None), section_slug=None, tag_slug=None
+        fragment = is_fragment(request, cursor)
+        found = await ArticleService(db).list_public(
+            locale,
+            listing_params(_PAGE, page, fragment, cursor),
+            section_slug=None,
+            tag_slug=None,
         )
-        articles = page.items
+        articles = found.items
+        next_cursor = found.next_cursor
     else:
         articles = [item.summary for item in curated]
         labels = {item.summary.slug: item.label for item in curated if item.label}
+    template = "public/fragments/stories.html" if fragment else "public/home.html"
     return templates.TemplateResponse(
-        request, "public/home.html", {"reader": reader, "articles": articles, "labels": labels}
+        request,
+        template,
+        {
+            "reader": reader,
+            "articles": articles,
+            "labels": labels,
+            **pager_context(
+                path=f"/{locale}/",
+                page=1 if curated is not None else page,
+                extra=None,
+                next_cursor=next_cursor,
+                fragment=fragment,
+                prev_key="list.previous",
+                more_key="list.more",
+            ),
+        },
     )
 
 
@@ -94,56 +124,109 @@ async def search(
     q: Annotated[str, Query(max_length=200)] = "",
     section: Annotated[str | None, Query(max_length=160)] = None,
     tag: Annotated[str | None, Query(max_length=160)] = None,
+    page: PageQuery = 1,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
-    page = await SearchService(db).search(
+    fragment = is_fragment(request, cursor)
+    found = await SearchService(db).search(
         SearchFilters(locale=locale, text=q, section_slug=section, tag_slug=tag),
-        PageParams(limit=20, cursor=cursor),
+        listing_params(_PAGE, page, fragment, cursor),
     )
     return templates.TemplateResponse(
         request,
-        "public/search.html",
-        {"reader": reader, "hits": page.items, "query": q, "next_cursor": page.next_cursor},
+        "public/fragments/hits.html" if fragment else "public/search.html",
+        {
+            "reader": reader,
+            "hits": found.items,
+            "query": q,
+            **pager_context(
+                path=f"/{locale}/search",
+                page=page,
+                extra={"q": q, "section": section or "", "tag": tag or ""},
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="list.previous",
+                more_key="search.more",
+            ),
+        },
     )
 
 
 @router.get("/{locale}/section/{slug}", response_class=HTMLResponse)
 async def section(
-    request: Request, locale: LocaleParam, slug: str, reader: OptionalReader, db: DbSession
+    request: Request,
+    locale: LocaleParam,
+    slug: str,
+    reader: OptionalReader,
+    db: DbSession,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
-    page = await ArticleService(db).list_public(
-        locale, PageParams(limit=20, cursor=None), section_slug=slug, tag_slug=None
+    fragment = is_fragment(request, cursor)
+    found = await ArticleService(db).list_public(
+        locale,
+        listing_params(_PAGE, page, fragment, cursor),
+        section_slug=slug,
+        tag_slug=None,
     )
     sections = getattr(request.state, "nav_sections", [])
     return templates.TemplateResponse(
         request,
-        "public/home.html",
+        "public/fragments/stories.html" if fragment else "public/home.html",
         {
             "reader": reader,
-            "articles": page.items,
+            "articles": found.items,
             "heading": _section_name(sections, slug) or slug,
             "current_section": slug,
             "empty_key": "home.empty",
+            **pager_context(
+                path=f"/{locale}/section/{slug}",
+                page=page,
+                extra=None,
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="list.previous",
+                more_key="list.more",
+            ),
         },
     )
 
 
 @router.get("/{locale}/tag/{slug}", response_class=HTMLResponse)
 async def tag(
-    request: Request, locale: LocaleParam, slug: str, reader: OptionalReader, db: DbSession
+    request: Request,
+    locale: LocaleParam,
+    slug: str,
+    reader: OptionalReader,
+    db: DbSession,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
-    found = await TaxonomyService(db).public_tag(locale, slug)
-    page = await ArticleService(db).list_public(
-        locale, PageParams(limit=20, cursor=None), section_slug=None, tag_slug=slug
+    found_tag = await TaxonomyService(db).public_tag(locale, slug)
+    fragment = is_fragment(request, cursor)
+    found = await ArticleService(db).list_public(
+        locale,
+        listing_params(_PAGE, page, fragment, cursor),
+        section_slug=None,
+        tag_slug=slug,
     )
     return templates.TemplateResponse(
         request,
-        "public/home.html",
+        "public/fragments/stories.html" if fragment else "public/home.html",
         {
             "reader": reader,
-            "articles": page.items,
-            "heading": found.name,
+            "articles": found.items,
+            "heading": found_tag.name,
             "empty_key": "tag.empty",
+            **pager_context(
+                path=f"/{locale}/tag/{slug}",
+                page=page,
+                extra=None,
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="list.previous",
+                more_key="list.more",
+            ),
         },
     )
 

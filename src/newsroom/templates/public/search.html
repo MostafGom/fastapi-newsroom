@@ -8,25 +8,16 @@
     <input name="q" value="{{ query }}" placeholder="{{ _('search.placeholder') }}">
     <button class="btn" type="submit">{{ _("search.submit") }}</button>
   </form>
+  <div id="listing">
   {% if hits %}
-    <ul>
-      {% for hit in hits %}
-        <li class="border-b border-line py-5">
-          <p class="meta"><a class="no-underline" href="/{{ locale }}/section/{{ hit.section_slug }}">{{ hit.section_name }}</a></p>
-          <h2 class="headline mt-1 text-2xl">
-            <a class="text-ink no-underline" href="/{{ locale }}/article/{{ hit.slug }}">{{ hit.title }}</a>
-          </h2>
-          {% if hit.snippet %}<p class="mt-2 text-muted">{{ hit.snippet|safe }}</p>{% endif %}
-          <p class="meta mt-2"><time datetime="{{ hit.published_at.isoformat() }}">{{ format_date(hit.published_at, locale) }}</time></p>
-        </li>
-      {% endfor %}
+    <ul id="listing-items" class="story-list">
+      {% include "public/partials/hit_items.html" %}
     </ul>
-    {% if next_cursor %}
-      <p class="mt-6"><a href="/{{ locale }}/search?q={{ query|urlencode }}&amp;cursor={{ next_cursor|urlencode }}">{{ _("search.more") }}</a></p>
-    {% endif %}
+    {% include "partials/pager.html" %}
   {% elif query %}
     <p class="text-muted">{{ _("search.empty") }}</p>
   {% endif %}
+  </div>
 </main>
 {% include "public/partials/footer.html" %}
 {% endblock %}

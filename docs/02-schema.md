@@ -221,7 +221,7 @@ Join tables: `article_authors(article_id, author_id, position)`, `article_tags(a
 | first_published_at | `timestamptz` NULL | never changes once set |
 | update_requested_at | `timestamptz` NULL | writer proposed an update to a live article |
 | lock_version | `int` | optimistic concurrency on metadata changes |
-| legal_hold | `bool` | publish and schedule are refused until cleared |
+| legal_hold | `bool` | schedule, publish, and republish are refused until cleared |
 | deleted_at | `timestamptz` NULL | only allowed when `first_published_at IS NULL` |
 | created_at / updated_at | `timestamptz` | |
 
@@ -290,7 +290,7 @@ A correction is a factual fix. A clarification adds context without admitting an
 An update marks a developing story ("this story was updated at 14:10 to include the ministry statement").
 
 `article_localizations` also carries `legal_hold boolean` (default false). It is not a workflow
-status: the story stays where it is, and publish/schedule are blocked until an editor records
+status: the story stays where it is, and schedule, publish, and republish are blocked until an editor records
 clearance (`article.clear_legal`). Takedowns store `TakedownReason` on the audit event, not as a
 column, so the reason travels with the history.
 

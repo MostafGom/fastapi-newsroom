@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
@@ -18,11 +18,13 @@ from newsroom.authz.permissions import Perm
 from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
-from newsroom.core.schemas import PageParams
 from newsroom.homepage.service import HomepageService
 from newsroom.media.schemas import MediaTranslationIn
 from newsroom.media.service import MediaService
+from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
+
+_PAGE = 40
 
 router = APIRouter(
     prefix="/admin", dependencies=[Depends(csrf_protect_web)], include_in_schema=False
@@ -35,18 +37,34 @@ def _require(staff: Principal, perm: Perm) -> None:
 
 
 @router.get("/media", response_class=HTMLResponse)
-async def media_page(request: Request, staff: CurrentStaff, db: DbSession) -> HTMLResponse:
+async def media_page(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> HTMLResponse:
     _require(staff, Perm.MEDIA_UPLOAD)
-    assets = await MediaService(db).list_recent()
+    fragment = is_fragment(request, cursor)
+    found = await MediaService(db).list_page(listing_params(_PAGE, page, fragment, cursor))
     return templates.TemplateResponse(
         request,
-        "admin/media.html",
+        "admin/fragments/media.html" if fragment else "admin/media.html",
         {
             "staff": staff,
-            "assets": assets,
+            "assets": found.items,
             "locales": getattr(request.state, "enabled_locales", None)
             or get_settings().supported_locales,
             "can_manage": staff.grants.has_anywhere(Perm.MEDIA_MANAGE),
+            **pager_context(
+                path="/admin/media",
+                page=page,
+                extra=None,
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
         },
     )
 
@@ -115,26 +133,51 @@ async def delete_media(asset_id: uuid.UUID, staff: CurrentStaff, db: DbSession) 
 
 @router.get("/homepage", response_class=HTMLResponse)
 async def homepage_page(
-    request: Request, staff: CurrentStaff, db: DbSession, locale: str | None = None
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    locale: str | None = None,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
     _require(staff, Perm.ARTICLE_PUBLISH)
     code = locale if locale in get_settings().supported_locales else get_settings().default_locale
-    page = await ArticleService(db).list_public(
-        code, PageParams(limit=40, cursor=None), section_slug=None, tag_slug=None
+    fragment = is_fragment(request, cursor)
+    found = await ArticleService(db).list_public(
+        code,
+        listing_params(_PAGE, page, fragment, cursor),
+        section_slug=None,
+        tag_slug=None,
     )
     curated = await HomepageService(db).public_stories(code) or []
     positions = {item.summary.slug: index for index, item in enumerate(curated, start=1)}
     labels = {item.summary.slug: item.label or "" for item in curated}
+    if fragment:
+        pinned_slugs = {item.summary.slug for item in curated}
+        stories = [item for item in found.items if item.slug not in pinned_slugs]
+    else:
+        on_page = {item.slug for item in found.items}
+        pinned = [item.summary for item in curated if item.summary.slug not in on_page]
+        stories = [*pinned, *found.items]
     return templates.TemplateResponse(
         request,
-        "admin/homepage.html",
+        "admin/fragments/homepage.html" if fragment else "admin/homepage.html",
         {
             "staff": staff,
             "locale": code,
             "locales": get_settings().supported_locales,
-            "stories": page.items,
+            "stories": stories,
             "positions": positions,
             "labels": labels,
+            **pager_context(
+                path="/admin/homepage",
+                page=page,
+                extra={"locale": code},
+                next_cursor=found.next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
         },
     )
 

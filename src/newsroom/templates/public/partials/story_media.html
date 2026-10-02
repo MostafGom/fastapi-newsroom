@@ -1,0 +1,14 @@
+<figure class="story-media">
+  {% if image_url %}
+    <img src="{{ image_url }}" alt="">
+  {% else %}
+    <div class="story-fallback" aria-hidden="true">
+      <svg class="story-fallback-mark" viewBox="0 0 72 44" xmlns="http://www.w3.org/2000/svg">
+        <rect width="72" height="5" class="mark-rule"/>
+        <rect y="14" width="52" height="3" class="mark-ink"/>
+        <rect y="23" width="40" height="3" class="mark-ink"/>
+        <rect y="32" width="28" height="3" class="mark-muted"/>
+      </svg>
+    </div>
+  {% endif %}
+</figure>

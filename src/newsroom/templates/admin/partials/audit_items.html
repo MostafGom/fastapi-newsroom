@@ -1,0 +1,9 @@
+{% for event in events %}
+<li class="border-b border-line py-2">
+  <p class="flex flex-wrap items-baseline justify-between gap-3">
+    <span class="font-bold" dir="ltr">{{ event.action }}</span>
+    <span class="text-sm text-muted" dir="ltr">{{ event.occurred_at }}</span>
+  </p>
+  <p class="text-sm text-muted" dir="ltr">{{ event.entity_type }} {{ event.entity_id }}{% if event.reason %} · {{ event.reason }}{% endif %}</p>
+</li>
+{% endfor %}

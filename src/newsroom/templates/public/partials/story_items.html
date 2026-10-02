@@ -1,0 +1,17 @@
+{% for article in rows %}
+<li class="story-card">
+  {% set image_url = article.lead_image_url %}
+  {% include "public/partials/story_media.html" %}
+  <div class="story-body">
+    {% include "public/partials/kicker.html" %}
+    <h2 class="headline text-2xl">
+      <a class="text-ink no-underline" href="/{{ locale }}/article/{{ article.slug }}">{{ article.title }}</a>
+    </h2>
+    {% if article.excerpt %}<p class="story-excerpt">{{ article.excerpt }}</p>{% endif %}
+    {% set bylines = article.bylines %}
+    {% set published_at = article.published_at %}
+    {% set slug = article.slug %}
+    {% include "public/partials/story_foot.html" %}
+  </div>
+</li>
+{% endfor %}

@@ -2,10 +2,11 @@ import json
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from newsroom.articles.body import InvalidBody, render_body
+from newsroom.articles.workflow import TRANSITIONS, ArticleStatus
 from newsroom.auth.dependencies import (
     OptionalStaff,
     SettingsDep,
@@ -18,7 +19,10 @@ from newsroom.auth.service import AuthService, InvalidCredentials
 from newsroom.authz.dependencies import CurrentStaff
 from newsroom.core.db import DbSession
 from newsroom.web.admin.desk import story_rows
+from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
+
+_STORY_PAGE = 50
 
 router = APIRouter(
     prefix="/admin", dependencies=[Depends(csrf_protect_web)], include_in_schema=False
@@ -122,19 +126,58 @@ async def editor_preview(
     )
 
 
+_STATUS_ORDER = {status: index for index, status in enumerate(ArticleStatus)}
+
+
+@router.get("/workflow", response_class=HTMLResponse)
+async def workflow_page(request: Request, staff: CurrentStaff) -> HTMLResponse:
+    """The desk state machine, for every signed-in staff member."""
+    transitions = [
+        {
+            "action": transition.action,
+            "sources": sorted(transition.sources, key=_STATUS_ORDER.__getitem__),
+            "target": transition.target,
+            "permission": transition.permission.value,
+            "requires_reason": transition.requires_reason,
+            "owner_may_act": transition.owner_may_act,
+        }
+        for transition in TRANSITIONS.values()
+    ]
+    return templates.TemplateResponse(
+        request, "admin/workflow.html", {"staff": staff, "transitions": transitions}
+    )
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(
-    request: Request, staff: CurrentStaff, db: DbSession, notice: str | None = None
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    notice: str | None = None,
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
+    fragment = is_fragment(request, cursor)
+    bounds = listing_params(_STORY_PAGE, page, fragment, cursor)
+    stories, next_cursor = await story_rows(staff, db, cursor=bounds.cursor, limit=bounds.limit)
     return templates.TemplateResponse(
         request,
-        "admin/dashboard.html",
+        "admin/fragments/stories.html" if fragment else "admin/dashboard.html",
         {
             "staff": staff,
             "roles": sorted(staff.grants.role_keys),
             "permissions": sorted(staff.grants.all_permissions()),
-            "stories": await story_rows(staff, db),
+            "stories": stories,
             "notice": notice,
             "detail": request.query_params.get("detail"),
+            **pager_context(
+                path="/admin/",
+                page=page,
+                extra=None,
+                next_cursor=next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
         },
     )

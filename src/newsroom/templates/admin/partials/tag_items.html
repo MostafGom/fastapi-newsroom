@@ -1,0 +1,8 @@
+{% for tag in tags %}
+<li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
+  <span class="font-bold" dir="ltr">{{ tag.key }}</span>
+  <span class="text-sm text-muted">
+    {% for code in supported_locales %}{% if tag.locales[code].name %}{{ tag.locales[code].name }}{% if not loop.last %} · {% endif %}{% endif %}{% endfor %}
+  </span>
+</li>
+{% endfor %}

@@ -77,8 +77,7 @@ Settled behavior:
 
 Do this next, in this order, unless the user says otherwise.
 
-1. **Pagination.** The contract is cursor-based (`limit` + opaque `cursor`, `next_cursor` when another page exists). It works for reader search, and on the desk for accounts, tags, and the audit log. It does **not** work for the reader home, section, and tag pages, or for desk stories, media, and the homepage picker: those queries cap the page and return `next_cursor: null`. `list_admin` also filters permissions in Python after the SQL limit, so a page can come back short. Wire the cursor through. Leave languages and roles as one page.
-2. **Desk search.** Do not put stories, accounts, and the audit log in one box. Add a story search that includes drafts (the public index cannot do that), plus a text filter on each list that already has a natural key: email on accounts, key or name on tags, sections, and bylines, filename on media.
+1. **Desk search.** Do not put stories, accounts, and the audit log in one box. Add a story search that includes drafts (the public index cannot do that), plus a text filter on each list that already has a natural key: email on accounts, key or name on tags, sections, and bylines, filename on media.
 
 Still out of scope until the user asks: Meilisearch or typo-tolerant search, a comment moderation queue, a paywall, newsletter unsubscribe, staff 2FA, a dark theme.
 

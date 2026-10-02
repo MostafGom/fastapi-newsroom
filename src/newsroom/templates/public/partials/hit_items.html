@@ -1,0 +1,17 @@
+{% for hit in hits %}
+<li class="story-card">
+  {% set image_url = none %}
+  {% include "public/partials/story_media.html" %}
+  <div class="story-body">
+    <p class="meta"><a class="no-underline" href="/{{ locale }}/section/{{ hit.section_slug }}">{{ hit.section_name }}</a></p>
+    <h2 class="headline text-2xl">
+      <a class="text-ink no-underline" href="/{{ locale }}/article/{{ hit.slug }}">{{ hit.title }}</a>
+    </h2>
+    {% if hit.snippet %}<p class="story-excerpt">{{ hit.snippet|safe }}</p>{% endif %}
+    {% set bylines = none %}
+    {% set published_at = hit.published_at %}
+    {% set slug = hit.slug %}
+    {% include "public/partials/story_foot.html" %}
+  </div>
+</li>
+{% endfor %}
