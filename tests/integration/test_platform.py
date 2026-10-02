@@ -90,8 +90,40 @@ async def test_public_home_is_localized(client: AsyncClient) -> None:
 
     arabic = await client.get("/ar/")
     assert '<html lang="ar" dir="rtl">' in arabic.text
+    assert arabic.text.index('href="/ar/"') < arabic.text.index('href="/en/"')
     assert "nr_csrf=" in arabic.headers.get("set-cookie", "")
 
     english = await client.get("/en/")
     assert '<html lang="en" dir="ltr">' in english.text
     assert "set-cookie" not in english.headers, "a valid CSRF cookie is reused, not rotated"
+
+
+async def test_admin_language_switch(client: AsyncClient) -> None:
+    login = await client.get("/admin/login")
+    assert '<html lang="ar" dir="rtl">' in login.text
+    arabic_link = 'href="/admin/language/ar?next='
+    english_link = 'href="/admin/language/en?next='
+    assert login.text.index(arabic_link) < login.text.index(english_link)
+    assert login.text.index("العربية") < login.text.index(">English<")
+
+    switched = await client.get("/admin/language/en", params={"next": "/admin/login"})
+    assert switched.status_code == 303
+    assert switched.headers["location"] == "/admin/login"
+    cookie = next(
+        item for item in switched.headers.get_list("set-cookie") if "nr_ui_locale=" in item
+    )
+    assert cookie.startswith("nr_ui_locale=en")
+    assert "Path=/admin" in cookie
+
+    english_desk = await client.get("/admin/login")
+    assert '<html lang="en" dir="ltr">' in english_desk.text
+
+    rejected = await client.get("/admin/language/fr", params={"next": "/admin/login"})
+    assert rejected.status_code == 404
+
+    outside = await client.get("/admin/language/en", params={"next": "https://evil.example/admin"})
+    assert outside.status_code == 303
+    assert outside.headers["location"] == "/admin/"
+
+    public = await client.get("/ar/")
+    assert '<html lang="ar" dir="rtl">' in public.text

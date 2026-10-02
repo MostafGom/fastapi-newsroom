@@ -39,6 +39,11 @@
       {% endif %}
       <a href="/admin/editor">{{ _("editor.preview") }}</a>
     {% endif %}
+    <span class="flex gap-3" aria-label="{{ _('site.languages') }}">
+      {% for code in interface_locales %}
+        <a class="no-underline {% if code == locale %}font-semibold{% endif %}" href="/admin/language/{{ code }}?next={{ admin_next }}" {% if code == locale %}aria-current="page"{% endif %}>{{ _("locale." ~ code) }}</a>
+      {% endfor %}
+    </span>
     {% if principal %}
     <div class="relative">
       <button class="btn-quiet" type="button" @click="open = !open" :aria-expanded="open">{{ principal.user.display_name or principal.user.email }}</button>

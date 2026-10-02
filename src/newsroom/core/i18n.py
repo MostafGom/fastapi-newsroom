@@ -7,6 +7,7 @@ from pathlib import Path
 from newsroom.core.config import Settings, get_settings
 
 MESSAGES_DIR = Path(__file__).resolve().parent.parent / "messages"
+UI_LOCALE_COOKIE = "nr_ui_locale"
 
 
 class TextDirection(StrEnum):
@@ -68,6 +69,24 @@ def negotiate_locale(
         if base in codes:
             return base
     return fallback
+
+
+def ordered_locales(codes: list[str], default: str) -> list[str]:
+    """Default language first, then the remaining codes in their existing order."""
+    if default in codes:
+        return [default, *[code for code in codes if code != default]]
+    return list(codes)
+
+
+@cache
+def catalog_codes() -> frozenset[str]:
+    return frozenset(path.stem for path in MESSAGES_DIR.glob("*.json"))
+
+
+def interface_locales(codes: list[str], default: str) -> list[str]:
+    """Dashboard languages: enabled locales that have a message catalog, default first."""
+    catalogs = catalog_codes()
+    return [code for code in ordered_locales(codes, default) if code in catalogs]
 
 
 @cache
