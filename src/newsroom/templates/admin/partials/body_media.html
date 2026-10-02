@@ -1,8 +1,28 @@
-<dialog id="body-media" class="media-picker-dialog">
-  <form method="dialog">
-    <button class="btn-line" type="submit">{{ _("manage.close") }}</button>
+<dialog id="body-media" class="media-picker-dialog"
+        data-upload-failed="{{ _('media.upload_failed') }}"
+        data-alt-missing="{{ _('media.alt_missing') }}">
+  <div class="media-picker-head">
+    <p class="lede">{{ _("media.pick") }}</p>
+    <form method="dialog">
+      <button class="btn-line" type="submit">{{ _("manage.close") }}</button>
+    </form>
+  </div>
+  <form id="body-media-upload" class="media-picker-upload">
+    <img id="body-media-preview" class="upload-preview" alt="{{ _('media.preview') }}" hidden>
+    <div class="form-row">
+      <input id="body-media-file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp" required>
+      <input name="credit" placeholder="{{ _('media.credit') }}" maxlength="200">
+      <input name="alt_text" placeholder="{{ _('media.alt') }}" maxlength="500">
+      <button class="btn" type="submit">{{ _("media.upload") }}</button>
+      <button id="body-media-clear" class="btn-quiet" type="button" hidden
+              data-stop="{{ _('media.stop') }}">{{ _("media.cancel") }}</button>
+    </div>
   </form>
-  <p class="lede mb-3">{{ _("media.pick") }}</p>
+  <p id="body-media-status" class="mb-3 text-accent" hidden></p>
+  <div id="body-media-pending" class="form-row mb-3" hidden>
+    <input id="body-media-pending-alt" maxlength="500" placeholder="{{ _('media.alt') }}">
+    <button id="body-media-use" class="btn" type="button">{{ _("media.use") }}</button>
+  </div>
   <label class="field">{{ _("media.filename") }}
     <input id="body-media-query" name="q" maxlength="200"
            hx-get="/admin/media/picker"

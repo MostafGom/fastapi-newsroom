@@ -380,4 +380,6 @@ async def test_story_picks_images_from_the_library(
     assert 'name="media_id"' in story.text
     assert "/admin/media/picker?mode=lead" in story.text
     assert 'id="body-media"' in story.text
+    assert 'id="body-media-upload"' in story.text
+    assert 'id="body-media-file"' in story.text
     assert 'data-locale="en"' in story.text

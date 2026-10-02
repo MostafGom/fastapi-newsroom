@@ -634,6 +634,7 @@ html {
 }
 
 .media-view {
+  margin: auto;
   width: min(70rem, calc(100vw - 2.5rem));
   max-height: calc(100vh - 2.5rem);
   padding: 0.75rem;
@@ -735,11 +736,33 @@ html {
 }
 
 .media-picker-dialog {
+  margin: auto;
   width: min(52rem, calc(100vw - 2.5rem));
   max-height: calc(100vh - 2.5rem);
+  overflow: auto;
   padding: 0.9rem;
   border: 1px solid var(--color-ink);
   background: var(--color-paper);
+}
+
+.media-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.media-picker-head .lede {
+  margin: 0;
+}
+
+.media-picker-upload {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .media-picker-dialog::backdrop {
