@@ -137,6 +137,63 @@ def _visible_actions(staff: CurrentStaff, section_id: uuid.UUID, created_by: uui
     return visible
 
 
+@dataclass(frozen=True, slots=True)
+class DeskStep:
+    value: str
+    requires_reason: bool
+    needs_schedule: bool
+
+
+_ACTION_GROUPS: tuple[tuple[str, tuple[ArticleAction, ...]], ...] = (
+    (
+        "desk",
+        (
+            ArticleAction.SUBMIT,
+            ArticleAction.WITHDRAW,
+            ArticleAction.SEND_TO_COPY,
+            ArticleAction.RETURN_TO_WRITER,
+            ArticleAction.FINISH_COPY,
+            ArticleAction.REQUEST_CHANGES,
+            ArticleAction.APPROVE,
+        ),
+    ),
+    (
+        "publish",
+        (
+            ArticleAction.SCHEDULE,
+            ArticleAction.CANCEL_SCHEDULE,
+            ArticleAction.PUBLISH,
+            ArticleAction.PUBLISH_UPDATE,
+            ArticleAction.REPUBLISH,
+        ),
+    ),
+    (
+        "live",
+        (ArticleAction.ARCHIVE, ArticleAction.UNARCHIVE),
+    ),
+    ("stop", (ArticleAction.KILL, ArticleAction.DELETE)),
+)
+
+
+def _group_actions(actions: list[ArticleAction]) -> list[dict]:
+    """Bucket the steps this person can take. Empty groups stay off the page."""
+    allowed = set(actions)
+    grouped: list[dict] = []
+    for key, members in _ACTION_GROUPS:
+        steps = [
+            DeskStep(
+                value=action.value,
+                requires_reason=TRANSITIONS[action].requires_reason,
+                needs_schedule=action is ArticleAction.SCHEDULE,
+            )
+            for action in members
+            if action in allowed
+        ]
+        if steps:
+            grouped.append({"key": key, "steps": steps})
+    return grouped
+
+
 async def _desk_choices(db: DbSession, locale: str) -> tuple[list[dict], list[dict]]:
     sections = await TaxonomyService(db).list_admin_sections()
     tags = await TaxonomyService(db).list_tags(PageParams(limit=100, cursor=None), None)
@@ -189,6 +246,7 @@ async def create_story(
     is_breaking: Annotated[str | None, Form()] = None,
     tag_ids: Annotated[list[str] | None, Form()] = None,
     author_ids: Annotated[list[str] | None, Form()] = None,
+    lead_media_id: Annotated[str, Form()] = "",
 ) -> Response:
     form = {
         "section_id": str(section_id),
@@ -201,12 +259,14 @@ async def create_story(
         "is_breaking": is_breaking == "1",
         "tag_ids": tag_ids or [],
         "author_ids": author_ids or [],
+        "lead_media_id": lead_media_id.strip(),
     }
     try:
         chosen_authors = _ids(author_ids or [])
         if not chosen_authors:
             author = await UserService(db).ensure_author(staff.user)
             chosen_authors = [author.id]
+        chosen_lead = uuid.UUID(form["lead_media_id"]) if form["lead_media_id"] else None
         created = await ArticleService(db).create(
             staff,
             ArticleCreate(
@@ -215,6 +275,7 @@ async def create_story(
                 author_ids=chosen_authors,
                 tag_ids=_ids(tag_ids or []),
                 is_breaking=is_breaking == "1",
+                lead_media_id=chosen_lead,
                 locale=locale,
                 slug=slug,
                 content=_content(title, subtitle, excerpt, body),
@@ -533,15 +594,17 @@ async def _edit_context(
         code for code in ("ar", "en") if code not in {item.locale for item in article.localizations}
     ]
     detail = request.query_params.get("detail")
+    visible = _visible_actions(
+        staff, article.section_id, article.created_by, story.available_actions
+    )
     return {
         "staff": staff,
         "story": story,
         "article": article,
         "editor_dir": _direction(story.locale),
         "body_json": json.dumps(content.body),
-        "actions": _visible_actions(
-            staff, article.section_id, article.created_by, story.available_actions
-        ),
+        "action_groups": _group_actions(visible),
+        "can_unpublish": ArticleAction.UNPUBLISH in visible,
         "takedown_reasons": list(TakedownReason),
         "missing_locales": missing,
         "translation_dir": _direction(missing[0]) if missing else "rtl",

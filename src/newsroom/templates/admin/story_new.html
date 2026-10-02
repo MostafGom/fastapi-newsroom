@@ -71,6 +71,23 @@
     <input type="checkbox" name="is_breaking" value="1" {% if form.is_breaking %}checked{% endif %}>
     {{ _("desk.breaking") }}
   </label>
+  <div>
+    <p class="field">{{ _("media.lead") }}</p>
+    <p class="lede mb-3">{{ _("guide.lead") }}</p>
+    <input type="hidden" name="lead_media_id" id="lead-media-id" value="{{ form.lead_media_id or '' }}">
+    <img id="lead-preview" class="lead-preview mb-3" alt=""
+         {% if form.lead_media_id %}src="/media/{{ form.lead_media_id }}"{% else %}hidden{% endif %}>
+    <div class="form-actions">
+      <button class="btn-line" type="button" data-lead-picker
+              data-locale="{{ chosen_locale }}"
+              data-input="lead-media-id"
+              data-preview="lead-preview">{{ _("media.choose") }}</button>
+      <button class="btn-quiet" type="button" data-lead-clear
+              data-input="lead-media-id"
+              data-preview="lead-preview"
+              {% if not form.lead_media_id %}hidden{% endif %}>{{ _("media.none") }}</button>
+    </div>
+  </div>
   {% set editor_locale = chosen_locale %}
   {% include "admin/partials/richtext.html" %}
   <div class="form-actions">

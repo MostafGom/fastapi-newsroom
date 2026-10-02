@@ -53,6 +53,18 @@ function csrfToken() {
   return document.querySelector('meta[name="csrf-token"]')?.content || "";
 }
 
+function pickerMode(dialog) {
+  return dialog.querySelector("#body-media-mode")?.value === "lead" ? "lead" : "body";
+}
+
+function setPickerCopy(dialog) {
+  const lede = dialog.querySelector("#body-media-lede");
+  if (!lede) return;
+  const lead = pickerMode(dialog) === "lead";
+  const text = lead ? dialog.dataset.pickLead : dialog.dataset.pickBody;
+  if (text) lede.textContent = text;
+}
+
 function refreshChoices(dialog) {
   const choices = dialog.querySelector("#body-media-choices");
   if (!choices || !window.htmx) return;
@@ -61,7 +73,7 @@ function refreshChoices(dialog) {
   window.htmx.ajax("GET", "/admin/media/picker", {
     target: choices,
     swap: "innerHTML",
-    values: { mode: "body", locale, q: query },
+    values: { mode: pickerMode(dialog), locale, q: query },
   });
 }
 
@@ -199,6 +211,10 @@ async function uploadFromEditor(dialog, form) {
     return;
   }
   const generated = altForLocale(asset, locale);
+  if (pickerMode(dialog) === "lead") {
+    chooseUploaded(dialog, asset, generated || "");
+    return;
+  }
   if (generated) {
     chooseUploaded(dialog, asset, generated);
     return;
@@ -221,7 +237,7 @@ function bindLibrary(dialog) {
     const pick = event.target.closest("[data-pick]");
     if (!pick || pick.disabled) return;
     const alt = (pick.dataset.alt || "").trim();
-    if (!alt) return;
+    if (pickerMode(dialog) !== "lead" && !alt) return;
     dialog.dataset.src = `/media/${pick.dataset.pick}`;
     dialog.dataset.alt = alt;
     dialog.close("chosen");
@@ -272,16 +288,20 @@ function bindLibrary(dialog) {
   });
   dialog.addEventListener("close", () => {
     if (dialog.controller) dialog.controller.abort();
+    const modeInput = dialog.querySelector("#body-media-mode");
+    if (modeInput) modeInput.value = "body";
+    setPickerCopy(dialog);
   });
 }
 
-function openLibrary(editor, host) {
-  const dialog = document.getElementById("body-media");
-  if (!dialog || typeof dialog.showModal !== "function") return;
+function preparePicker(dialog, mode, locale) {
   bindLibrary(dialog);
-  const locale = host.dataset.locale || "";
-  const localeInput = dialog.querySelector("#body-media-locale");
-  if (localeInput) localeInput.value = locale;
+  const modeInput = dialog.querySelector("#body-media-mode");
+  if (modeInput) modeInput.value = mode;
+  if (locale) {
+    const localeInput = dialog.querySelector("#body-media-locale");
+    if (localeInput) localeInput.value = locale;
+  }
   const query = dialog.querySelector("#body-media-query");
   if (query) query.value = "";
   delete dialog.dataset.src;
@@ -289,7 +309,14 @@ function openLibrary(editor, host) {
   clearUpload(dialog);
   hidePending(dialog);
   setStatus(dialog, "");
+  setPickerCopy(dialog);
   refreshChoices(dialog);
+}
+
+function openLibrary(editor, host) {
+  const dialog = document.getElementById("body-media");
+  if (!dialog || typeof dialog.showModal !== "function") return;
+  preparePicker(dialog, "body", host.dataset.locale || "");
   const onClose = () => {
     dialog.removeEventListener("close", onClose);
     if (dialog.returnValue !== "chosen") return;
@@ -300,6 +327,52 @@ function openLibrary(editor, host) {
   };
   dialog.addEventListener("close", onClose);
   dialog.showModal();
+}
+
+function openLeadPicker(button) {
+  const dialog = document.getElementById("body-media");
+  if (!dialog || typeof dialog.showModal !== "function") return;
+  preparePicker(dialog, "lead", button.dataset.locale || "");
+  const onClose = () => {
+    dialog.removeEventListener("close", onClose);
+    if (dialog.returnValue !== "chosen") return;
+    const match = (dialog.dataset.src || "").match(/\/media\/([^/?#]+)/);
+    const id = match ? match[1] : "";
+    if (!id) return;
+    const input = document.getElementById(button.dataset.input || "");
+    const preview = document.getElementById(button.dataset.preview || "");
+    if (input) input.value = id;
+    if (preview) {
+      preview.src = `/media/${id}`;
+      preview.hidden = false;
+    }
+    const clear = button.parentElement?.querySelector("[data-lead-clear]");
+    if (clear) clear.hidden = false;
+  };
+  dialog.addEventListener("close", onClose);
+  dialog.showModal();
+}
+
+function bindLeadControls(root) {
+  root.querySelectorAll("[data-lead-picker]").forEach((button) => {
+    if (button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", () => openLeadPicker(button));
+  });
+  root.querySelectorAll("[data-lead-clear]").forEach((button) => {
+    if (button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", () => {
+      const input = document.getElementById(button.dataset.input || "");
+      const preview = document.getElementById(button.dataset.preview || "");
+      if (input) input.value = "";
+      if (preview) {
+        preview.hidden = true;
+        preview.removeAttribute("src");
+      }
+      button.hidden = true;
+    });
+  });
 }
 
 function run(editor, command, host) {
@@ -328,6 +401,7 @@ function run(editor, command, host) {
 }
 
 export function mountEditors(root = document) {
+  bindLeadControls(root);
   root.querySelectorAll("[data-richtext]").forEach((host) => {
     if (host.dataset.mounted === "1") return;
     const surface = host.querySelector("[data-editor]");

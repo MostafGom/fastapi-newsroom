@@ -1,8 +1,10 @@
 <dialog id="body-media" class="media-picker-dialog"
         data-upload-failed="{{ _('media.upload_failed') }}"
-        data-alt-missing="{{ _('media.alt_missing') }}">
+        data-alt-missing="{{ _('media.alt_missing') }}"
+        data-pick-body="{{ _('media.pick') }}"
+        data-pick-lead="{{ _('media.pick_lead') }}">
   <div class="media-picker-head">
-    <p class="lede">{{ _("media.pick") }}</p>
+    <p id="body-media-lede" class="lede">{{ _("media.pick") }}</p>
     <form method="dialog">
       <button class="btn-line" type="submit">{{ _("manage.close") }}</button>
     </form>
