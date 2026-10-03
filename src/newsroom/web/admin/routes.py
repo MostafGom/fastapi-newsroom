@@ -2,7 +2,7 @@ import json
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from newsroom.articles.body import InvalidBody, render_body
@@ -19,11 +19,7 @@ from newsroom.auth.service import AuthService, InvalidCredentials
 from newsroom.authz.dependencies import CurrentStaff
 from newsroom.core.db import DbSession
 from newsroom.core.i18n import UI_LOCALE_COOKIE, interface_locales
-from newsroom.web.admin.desk import story_rows
-from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
-
-_STORY_PAGE = 50
 
 router = APIRouter(
     prefix="/admin", dependencies=[Depends(csrf_protect_web)], include_in_schema=False
@@ -179,32 +175,16 @@ async def workflow_page(request: Request, staff: CurrentStaff) -> HTMLResponse:
 async def dashboard(
     request: Request,
     staff: CurrentStaff,
-    db: DbSession,
     notice: str | None = None,
-    page: PageQuery = 1,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HTMLResponse:
-    fragment = is_fragment(request, cursor)
-    bounds = listing_params(_STORY_PAGE, page, fragment, cursor)
-    stories, next_cursor = await story_rows(staff, db, cursor=bounds.cursor, limit=bounds.limit)
     return templates.TemplateResponse(
         request,
-        "admin/fragments/stories.html" if fragment else "admin/dashboard.html",
+        "admin/dashboard.html",
         {
             "staff": staff,
             "roles": sorted(staff.grants.role_keys),
             "permissions": sorted(staff.grants.all_permissions()),
-            "stories": stories,
             "notice": notice,
             "detail": request.query_params.get("detail"),
-            **pager_context(
-                path="/admin/",
-                page=page,
-                extra=None,
-                next_cursor=next_cursor,
-                fragment=fragment,
-                prev_key="manage.previous",
-                more_key="manage.more",
-            ),
         },
     )

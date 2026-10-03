@@ -222,11 +222,12 @@ Join tables: `article_authors(article_id, author_id, position)`, `article_tags(a
 | update_requested_at | `timestamptz` NULL | writer proposed an update to a live article |
 | lock_version | `int` | optimistic concurrency on metadata changes |
 | legal_hold | `bool` | schedule, publish, and republish are refused until cleared |
+| reviewed_by | FK → users NULL | last staff member who reviewed, published, or took the edition down. Copy sign-off does not set it. Blank until that happens |
 | deleted_at | `timestamptz` NULL | only allowed when `first_published_at IS NULL` |
 | created_at / updated_at | `timestamptz` | |
 
 Indexes: `(status, publish_at) WHERE status = 'scheduled'`, `(status, unpublish_at) WHERE unpublish_at IS NOT NULL`,
-`(locale, published_at DESC) WHERE status = 'published'`.
+`(locale, published_at DESC) WHERE status = 'published'`, `reviewed_by`.
 
 The search vector is not a column here. It lives on `search_documents` so the engine can be replaced without rewriting articles.
 Check: `ck_deleted_never_published`: `deleted_at IS NULL OR first_published_at IS NULL`.

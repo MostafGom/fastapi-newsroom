@@ -134,6 +134,8 @@ class LocalizationSummaryOut(Schema):
     has_unpublished_changes: bool
     update_requested_at: UtcDatetime | None
     legal_hold: bool = False
+    reviewed_by: uuid.UUID | None = None
+    updated_at: UtcDatetime
     lock_version: int
 
 

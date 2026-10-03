@@ -156,6 +156,9 @@ class ArticleLocalization(UUIDPrimaryKey, Timestamps, Base):
     update_requested_at: Mapped[datetime | None]
     lock_version: Mapped[int] = mapped_column(default=1, server_default=text("1"))
     legal_hold: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
     deleted_at: Mapped[datetime | None]
 
     article: Mapped[Article] = relationship(back_populates="localizations", lazy="selectin")

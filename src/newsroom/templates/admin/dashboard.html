@@ -5,28 +5,10 @@
 {% if detail %}<p class="mt-4 text-accent" role="alert">{{ detail }}</p>{% endif %}
 <div class="desk-stack mt-6">
   <section class="panel">
-    <div class="panel-head">
-      <div>
-        <h2>{{ _("desk.stories") }}</h2>
-        <p class="lede">{{ _("guide.stories") }}</p>
-      </div>
-      <a class="btn-line" href="/admin/stories/new">{{ _("desk.new") }}</a>
-    </div>
-    <div id="listing">
-    {% if stories %}
-      <ul id="listing-items" class="grid gap-2">
-        {% include "admin/partials/desk_stories.html" %}
-      </ul>
-    {% else %}
-      <p class="text-muted">{{ _("desk.empty") }}</p>
-    {% endif %}
-    {% include "partials/pager.html" %}
-    </div>
-  </section>
-  <section class="panel">
     <h2>{{ _("admin.dashboard.areas") }}</h2>
     <p class="lede">{{ _("admin.dashboard.areas_help") }}</p>
     <ul class="area-grid">
+      <li><a href="/admin/stories"><strong>{{ _("desk.stories") }}</strong><span class="lede">{{ _("guide.stories") }}</span></a></li>
       <li><a href="/admin/workflow"><strong>{{ _("flow.nav") }}</strong><span class="lede">{{ _("guide.flow") }}</span></a></li>
       {% if staff.grants.has_anywhere(perms.ARTICLE_CREATE) %}
         <li><a href="/admin/stories/new"><strong>{{ _("desk.new") }}</strong><span class="lede">{{ _("guide.new") }}</span></a></li>

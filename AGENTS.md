@@ -85,6 +85,8 @@ Settled behavior:
 - Public search is Postgres full-text in `newsroom.search`, over **published** localizations only. Drafts are not in that index. Typo tolerance is later, behind the same service, not inside `ArticleService`.
 - Media bytes are stored under `MEDIA_DIR` as `{uuid}.{ext}` plus a display JPEG. The UUID is the public address (`/media/{id}`). A human filename is a separate column and must never become the path.
 - The public site is a newspaper: self-hosted Newsreader and Noto Naskh for reading, IBM Plex for the desk, square controls, red only for the masthead, kickers, corrections, and destructive actions.
+- New or changed desk UI follows `.cursor/skills/desk-ui`. Do not introduce a second visual system.
+- A UI review uses `.agents/skills/web-design-guidelines`, then `/impeccable critique`. Leave `bolder`, `delight`, and `colorize` unused unless the user asks.
 
 ## What is not done
 

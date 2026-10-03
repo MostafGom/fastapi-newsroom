@@ -8,6 +8,7 @@
   <aside id="desk-nav" class="desk-nav" :class="{ 'is-open': nav }">
     <a class="desk-brand" href="/admin/"{% if path in ["/admin", "/admin/"] %} aria-current="page"{% endif %}>{{ _("admin.title") }}</a>
     <nav class="desk-links" aria-label="{{ _('admin.title') }}">
+      <a href="/admin/stories"{% if path == "/admin/stories" %} aria-current="page"{% endif %}>{{ _("desk.stories") }}</a>
       <a href="/admin/stories/new"{% if path == "/admin/stories/new" or path.startswith("/admin/stories/new/") %} aria-current="page"{% endif %}>{{ _("desk.new") }}</a>
       <a href="/admin/workflow"{% if path == "/admin/workflow" or path.startswith("/admin/workflow/") %} aria-current="page"{% endif %}>{{ _("flow.nav") }}</a>
       {% if principal.grants.has_anywhere(perms.MEDIA_UPLOAD) %}

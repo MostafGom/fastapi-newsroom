@@ -153,7 +153,7 @@ async def test_section_editor_pages_only_their_desk(
     assert _slugs(second.json()) == ["own-a"]
     assert second.json()["next_cursor"] is None
 
-    desk = await client.get("/admin/?page=2")
+    desk = await client.get("/admin/stories?page=2")
     assert desk.status_code == 200
     assert "own-a" in desk.text
     assert "own-c" in desk.text
@@ -161,7 +161,7 @@ async def test_section_editor_pages_only_their_desk(
     assert "cursor=" not in desk.text
 
     fragment = await client.get(
-        "/admin/",
+        "/admin/stories",
         params={"page": 2, "cursor": body["next_cursor"]},
         headers={"hx-request": "true"},
     )
