@@ -83,6 +83,8 @@
   "editor.placeholder": "Write the story…",
   "editor.toolbar": "Formatting",
   "editor.direction": "Text direction",
+  "editor.rtl": "Right to left",
+  "editor.ltr": "Left to right",
   "editor.preview": "Preview",
   "desk.stories": "Stories",
   "desk.filter.search": "Title or slug",

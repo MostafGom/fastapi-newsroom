@@ -232,6 +232,30 @@ async def test_desk_sidebar_is_signed_in_only(client: AsyncClient, make_staff: M
     assert 'href="/admin/workflow" aria-current="page"' in flow.text
 
 
+async def test_new_story_starts_in_the_edition_direction(
+    client: AsyncClient, db: AsyncSession, make_staff: MakeStaff
+) -> None:
+    await TaxonomyService(db).create_section(
+        SectionCreate(
+            key="direction-desk",
+            translations=[
+                SectionTranslationIn(locale="en", name="Direction desk", slug="direction-desk"),
+                SectionTranslationIn(locale="ar", name="مكتب الاتجاه", slug="maktab-ittijah"),
+            ],
+        )
+    )
+    await _login(client, await make_staff("writer"))
+    arabic = await client.get("/admin/stories/new")
+    assert arabic.status_code == 200
+    assert 'data-dir="rtl"' in arabic.text
+    assert 'data-cmd="dir" data-value="ltr"' in arabic.text
+    assert 'name="title" required dir="rtl"' in arabic.text
+
+    english = await client.get("/admin/stories/new?locale=en")
+    assert 'data-dir="ltr"' in english.text
+    assert 'name="title" required dir="ltr"' in english.text
+
+
 def _lock(html: str) -> str:
     match = re.search(r'name="lock_version" value="(\d+)"', html)
     assert match is not None

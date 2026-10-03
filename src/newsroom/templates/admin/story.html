@@ -72,13 +72,13 @@
   <input type="hidden" name="base_revision_id" value="{{ story.current_revision.id }}">
   <input type="hidden" name="editor_dir" value="{{ editor_dir }}">
   <label class="field">{{ _("desk.title") }}
-    <input name="title" required value="{{ story.current_revision.content.title }}">
+    <input name="title" required dir="{{ editor_dir }}" data-writing value="{{ story.current_revision.content.title }}">
   </label>
   <label class="field">{{ _("desk.subtitle") }}
-    <input name="subtitle" value="{{ story.current_revision.content.subtitle or '' }}">
+    <input name="subtitle" dir="{{ editor_dir }}" data-writing value="{{ story.current_revision.content.subtitle or '' }}">
   </label>
   <label class="field">{{ _("desk.excerpt") }}
-    <textarea name="excerpt" rows="2">{{ story.current_revision.content.excerpt or '' }}</textarea>
+    <textarea name="excerpt" rows="2" dir="{{ editor_dir }}" data-writing>{{ story.current_revision.content.excerpt or '' }}</textarea>
   </label>
   {% set editor_locale = story.locale %}
   {% include "admin/partials/richtext.html" %}

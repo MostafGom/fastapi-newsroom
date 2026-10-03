@@ -375,7 +375,20 @@ function bindLeadControls(root) {
   });
 }
 
-function run(editor, command, host) {
+function applyDirection(editor, host, dir) {
+  const next = dir === "ltr" ? "ltr" : "rtl";
+  host.dataset.dir = next;
+  editor.view.dom.setAttribute("dir", next);
+  const form = host.closest("form");
+  const hidden = form?.querySelector('input[name="editor_dir"]');
+  if (hidden) hidden.value = next;
+  form?.querySelectorAll("[data-writing]").forEach((field) => field.setAttribute("dir", next));
+  host.querySelectorAll('[data-cmd="dir"]').forEach((button) => {
+    button.setAttribute("aria-pressed", button.dataset.value === next ? "true" : "false");
+  });
+}
+
+function run(editor, command, host, button) {
   const chain = editor.chain().focus();
   const commands = {
     bold: () => chain.toggleBold().run(),
@@ -396,6 +409,7 @@ function run(editor, command, host) {
       else chain.setLink({ href }).run();
     },
     image: () => openLibrary(editor, host),
+    dir: () => applyDirection(editor, host, button?.dataset.value),
   };
   commands[command]?.();
 }
@@ -444,7 +458,7 @@ export function mountEditors(root = document) {
     host.querySelectorAll("[data-cmd]").forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
-        run(editor, button.dataset.cmd, host);
+        run(editor, button.dataset.cmd, host, button);
       });
     });
   });

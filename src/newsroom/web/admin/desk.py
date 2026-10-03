@@ -258,6 +258,7 @@ async def create_story(
     tag_ids: Annotated[list[str] | None, Form()] = None,
     author_ids: Annotated[list[str] | None, Form()] = None,
     lead_media_id: Annotated[str, Form()] = "",
+    editor_dir: Annotated[str, Form()] = "",
 ) -> Response:
     form = {
         "section_id": str(section_id),
@@ -305,7 +306,7 @@ async def create_story(
                 "tags": tags,
                 "authors": await AuthorService(db).list_bylines(),
                 "chosen_locale": locale,
-                "editor_dir": _direction(locale),
+                "editor_dir": editor_dir if editor_dir in {"rtl", "ltr"} else _direction(locale),
                 "article_types": list(ArticleType),
                 "body_json": body or json.dumps(EMPTY_DOC),
                 "error": detail,
