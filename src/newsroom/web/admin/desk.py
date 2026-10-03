@@ -3,13 +3,14 @@
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from newsroom.articles.authors import AuthorService
 from newsroom.articles.body import InvalidBody
@@ -24,7 +25,7 @@ from newsroom.articles.schemas import (
     SlugChange,
     TransitionRequest,
 )
-from newsroom.articles.service import ArticleService
+from newsroom.articles.service import ArticleService, edition_window
 from newsroom.articles.workflow import (
     TRANSITIONS,
     ArticleAction,
@@ -41,8 +42,12 @@ from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
 from newsroom.taxonomy.schemas import SectionAdminOut, TagAdminOut
 from newsroom.taxonomy.service import TaxonomyService
+from newsroom.users.models import User, UserKind
 from newsroom.users.service import UserService
-from newsroom.web.templating import templates
+from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
+from newsroom.web.templating import _request_locale, templates
+
+_STORY_PAGE = 50
 
 router = APIRouter(
     prefix="/admin", dependencies=[Depends(csrf_protect_web)], include_in_schema=False
@@ -58,6 +63,11 @@ class StoryRow:
     locale: str
     slug: str
     status: str
+    section: str
+    bylines: tuple[str, ...]
+    editor: str | None
+    updated_at: datetime
+    legal_hold: bool
 
 
 def _direction(locale: str) -> str:
@@ -209,7 +219,8 @@ async def new_story(
 ) -> HTMLResponse:
     if not staff.grants.has_anywhere(Perm.ARTICLE_CREATE):
         raise PermissionDenied("You cannot create stories")
-    chosen = locale if locale in getattr(request.state, "enabled_locales", {"ar", "en"}) else "ar"
+    enabled = getattr(request.state, "enabled_locales", {"ar", "en"})
+    chosen = locale if isinstance(locale, str) and locale in enabled else "ar"
     sections, tags = await _desk_choices(db, chosen)
     authors = await AuthorService(db).list_bylines()
     return templates.TemplateResponse(
@@ -633,14 +644,149 @@ async def _edit_context(
     }
 
 
+def _optional_uuid(value: str) -> uuid.UUID | None:
+    if not value:
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        return None
+
+
+def _optional_status(value: str) -> ArticleStatus | None:
+    if not value:
+        return None
+    try:
+        return ArticleStatus(value)
+    except ValueError:
+        return None
+
+
+def _optional_date(value: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+@router.get("/stories", response_class=HTMLResponse)
+async def stories_page(
+    request: Request,
+    staff: CurrentStaff,
+    db: DbSession,
+    status: Annotated[str, Query(max_length=32)] = "",
+    locale: Annotated[str, Query(max_length=10)] = "",
+    section_id: Annotated[str, Query(max_length=36)] = "",
+    tag_id: Annotated[str, Query(max_length=36)] = "",
+    author_id: Annotated[str, Query(max_length=36)] = "",
+    reviewed_by: Annotated[str, Query(max_length=36)] = "",
+    updated_from: Annotated[str, Query(max_length=10)] = "",
+    updated_to: Annotated[str, Query(max_length=10)] = "",
+    q: Annotated[str, Query(max_length=200)] = "",
+    page: PageQuery = 1,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> HTMLResponse:
+    fragment = is_fragment(request, cursor)
+    bounds = listing_params(_STORY_PAGE, page, fragment, cursor)
+    ui = _request_locale(request)
+    sections = await TaxonomyService(db).list_admin_sections()
+    tags = (await TaxonomyService(db).list_tags(PageParams(limit=100, cursor=None), None)).items
+    authors = await AuthorService(db).list_bylines()
+    staff_rows = (
+        await db.scalars(select(User).where(User.kind == UserKind.STAFF).order_by(User.email))
+    ).all()
+    stories, next_cursor = await story_rows(
+        staff,
+        db,
+        cursor=bounds.cursor,
+        limit=bounds.limit,
+        status=_optional_status(status),
+        locale=locale.strip() or None,
+        section_id=_optional_uuid(section_id),
+        tag_id=_optional_uuid(tag_id),
+        author_id=_optional_uuid(author_id),
+        reviewed_by=_optional_uuid(reviewed_by),
+        updated_from=_optional_date(updated_from),
+        updated_to=_optional_date(updated_to),
+        q=q.strip() or None,
+        section_names={item.id: _label(item, ui) for item in sections},
+        author_names={item.id: item.display_name for item in authors},
+        editor_names={item.id: item.display_name or item.email for item in staff_rows},
+    )
+    filters = {
+        "status": status,
+        "locale": locale,
+        "section_id": section_id,
+        "tag_id": tag_id,
+        "author_id": author_id,
+        "reviewed_by": reviewed_by,
+        "updated_from": updated_from,
+        "updated_to": updated_to,
+        "q": q,
+    }
+    return templates.TemplateResponse(
+        request,
+        "admin/fragments/stories.html" if fragment else "admin/stories.html",
+        {
+            "staff": staff,
+            "stories": stories,
+            "statuses": list(ArticleStatus),
+            "sections": [(item.id, _label(item, ui)) for item in sections],
+            "tags": [(item.id, _tag_label(item, ui)) for item in tags],
+            "authors": authors,
+            "editors": [(item.id, item.display_name or item.email) for item in staff_rows],
+            "filters": filters,
+            **pager_context(
+                path="/admin/stories",
+                page=page,
+                extra=filters,
+                next_cursor=next_cursor,
+                fragment=fragment,
+                prev_key="manage.previous",
+                more_key="manage.more",
+            ),
+        },
+    )
+
+
 async def story_rows(
-    staff: CurrentStaff, db: DbSession, *, cursor: str | None, limit: int
+    staff: CurrentStaff,
+    db: DbSession,
+    *,
+    cursor: str | None,
+    limit: int,
+    status: ArticleStatus | None,
+    locale: str | None,
+    section_id: uuid.UUID | None,
+    tag_id: uuid.UUID | None,
+    author_id: uuid.UUID | None,
+    reviewed_by: uuid.UUID | None,
+    updated_from: date | None,
+    updated_to: date | None,
+    q: str | None,
+    section_names: dict[uuid.UUID, str],
+    author_names: dict[uuid.UUID, str],
+    editor_names: dict[uuid.UUID, str],
 ) -> tuple[list[StoryRow], str | None]:
+    opened, closed = edition_window(updated_from, updated_to)
     page = await ArticleService(db).list_admin(
-        staff, PageParams(limit=limit, cursor=cursor), status=None, locale=None, section_id=None
+        staff,
+        PageParams(limit=limit, cursor=cursor),
+        status=status,
+        locale=locale,
+        section_id=section_id,
+        author_id=author_id,
+        tag_id=tag_id,
+        reviewed_by=reviewed_by,
+        updated_from=opened,
+        updated_to=closed,
+        q=q,
     )
     rows: list[StoryRow] = []
     for article in page.items:
+        bylines = tuple(author_names[item] for item in article.author_ids if item in author_names)
         rows.extend(
             StoryRow(
                 localization_id=item.id,
@@ -648,6 +794,11 @@ async def story_rows(
                 locale=item.locale,
                 slug=item.slug,
                 status=item.status.value,
+                section=section_names.get(article.section_id, ""),
+                bylines=bylines,
+                editor=editor_names.get(item.reviewed_by) if item.reviewed_by else None,
+                updated_at=item.updated_at,
+                legal_hold=item.legal_hold,
             )
             for item in article.localizations
         )

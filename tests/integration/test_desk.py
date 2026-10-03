@@ -2,10 +2,12 @@ import base64
 import json
 import re
 import uuid
+from datetime import UTC, datetime
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from newsroom.articles.service import author_for_user
 from newsroom.taxonomy.schemas import SectionCreate, SectionTranslationIn
 from newsroom.taxonomy.service import TaxonomyService
 from tests.conftest import MakeStaff, StaffAccount
@@ -79,7 +81,10 @@ async def test_desk_publishes_a_story(
     story_url = created.headers["location"].split("?")[0]
 
     desk = await client.get("/admin/")
-    assert "Cabinet meets" in desk.text
+    assert "Cabinet meets" not in desk.text
+    assert 'href="/admin/stories"' in desk.text
+    listed = await client.get("/admin/stories")
+    assert "Cabinet meets" in listed.text
 
     page = await client.get(story_url)
     assert page.status_code == 200
@@ -207,9 +212,7 @@ async def test_new_story_stores_the_lead_image(
     assert "Media not found" in refused.text
 
 
-async def test_desk_sidebar_is_signed_in_only(
-    client: AsyncClient, make_staff: MakeStaff
-) -> None:
+async def test_desk_sidebar_is_signed_in_only(client: AsyncClient, make_staff: MakeStaff) -> None:
     login = await client.get("/admin/login")
     assert login.status_code == 200
     assert "desk-nav" not in login.text
@@ -219,9 +222,115 @@ async def test_desk_sidebar_is_signed_in_only(
     assert desk.status_code == 200
     assert 'id="desk-nav"' in desk.text
     assert 'href="/admin/" aria-current="page"' in desk.text
+    assert 'href="/admin/stories"' in desk.text
+    assert 'href="/admin/stories" aria-current="page"' not in desk.text
     assert 'href="/admin/workflow"' in desk.text
     assert 'href="/admin/workflow" aria-current="page"' not in desk.text
 
     flow = await client.get("/admin/workflow")
     assert flow.status_code == 200
     assert 'href="/admin/workflow" aria-current="page"' in flow.text
+
+
+def _lock(html: str) -> str:
+    match = re.search(r'name="lock_version" value="(\d+)"', html)
+    assert match is not None
+    return match.group(1)
+
+
+async def test_story_list_filters_by_desk_facts(
+    client: AsyncClient, db: AsyncSession, make_staff: MakeStaff
+) -> None:
+    section = await TaxonomyService(db).create_section(
+        SectionCreate(
+            key="filter-desk",
+            translations=[
+                SectionTranslationIn(locale="en", name="Filter desk", slug="filter-desk"),
+                SectionTranslationIn(locale="ar", name="مكتب التصفية", slug="maktab-tasfiya"),
+            ],
+        )
+    )
+    writer = await make_staff("writer")
+    editor = await make_staff("editor", section_id=section.id)
+    copy_editor = await make_staff("copy_editor")
+    author = await author_for_user(db, writer.id)  # type: ignore[arg-type]
+    assert author is not None
+
+    await _login(client, writer)
+    form = await client.get("/admin/stories/new?locale=en")
+    created = await client.post(
+        "/admin/stories/new",
+        data={
+            "csrf_token": _csrf(form.text),
+            "section_id": str(section.id),
+            "locale": "en",
+            "slug": "filter-target",
+            "title": "Filter target",
+            "article_type": "news",
+            "body": json.dumps(BODY),
+        },
+    )
+    assert created.status_code == 303, created.text
+    story_url = created.headers["location"].split("?")[0]
+
+    home = await client.get("/admin/")
+    assert "Filter target" not in home.text
+    listed = await client.get("/admin/stories")
+    assert listed.status_code == 200
+    assert 'href="/admin/stories" aria-current="page"' in listed.text
+    assert "Filter target" in listed.text
+    assert "مكتب التصفية" in listed.text
+    assert "Test writer" in listed.text
+    hidden = await client.get("/admin/stories", params={"status": "published"})
+    assert "Filter target" not in hidden.text
+    by_slug = await client.get("/admin/stories", params={"q": "filter-target"})
+    assert "Filter target" in by_slug.text
+    missed = await client.get("/admin/stories", params={"q": "no-such-story"})
+    assert "Filter target" not in missed.text
+    by_writer = await client.get("/admin/stories", params={"author_id": str(author.id)})
+    assert "Filter target" in by_writer.text
+    by_section = await client.get("/admin/stories", params={"section_id": str(section.id)})
+    assert "Filter target" in by_section.text
+    today = datetime.now(UTC).date().isoformat()
+    dated = await client.get("/admin/stories", params={"updated_from": today, "updated_to": today})
+    assert "Filter target" in dated.text
+    stale = await client.get("/admin/stories", params={"updated_to": "2000-01-01"})
+    assert "Filter target" not in stale.text
+
+    page = await client.get(story_url)
+    submitted = await client.post(
+        f"{story_url}/transition",
+        data={"csrf_token": _csrf(page.text), "action": "submit", "lock_version": _lock(page.text)},
+    )
+    assert submitted.status_code == 303
+
+    await _login(client, editor)
+    review = await client.get(story_url)
+    sent = await client.post(
+        f"{story_url}/transition",
+        data={
+            "csrf_token": _csrf(review.text),
+            "action": "send_to_copy",
+            "lock_version": _lock(review.text),
+        },
+    )
+    assert sent.status_code == 303
+    edited = await client.get("/admin/stories", params={"reviewed_by": str(editor.id)})
+    assert "Filter target" in edited.text
+    assert "Test editor" in edited.text
+
+    await _login(client, copy_editor)
+    signing = await client.get(story_url)
+    signed = await client.post(
+        f"{story_url}/transition",
+        data={
+            "csrf_token": _csrf(signing.text),
+            "action": "finish_copy",
+            "lock_version": _lock(signing.text),
+        },
+    )
+    assert signed.status_code == 303
+    still = await client.get("/admin/stories", params={"reviewed_by": str(editor.id)})
+    assert "Filter target" in still.text
+    not_copy = await client.get("/admin/stories", params={"reviewed_by": str(copy_editor.id)})
+    assert "Filter target" not in not_copy.text

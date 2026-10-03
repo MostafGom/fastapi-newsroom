@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -23,7 +23,7 @@ from newsroom.articles.schemas import (
     SlugChange,
     TransitionRequest,
 )
-from newsroom.articles.service import ArticleService
+from newsroom.articles.service import ArticleService, edition_window
 from newsroom.articles.workflow import ArticleStatus
 from newsroom.audit.schemas import AuditEventOut
 from newsroom.audit.service import AuditService
@@ -84,10 +84,26 @@ async def list_articles(
     locale: str | None = None,
     section_id: uuid.UUID | None = None,
     author_id: uuid.UUID | None = None,
+    tag_id: uuid.UUID | None = None,
+    reviewed_by: uuid.UUID | None = None,
+    updated_from: date | None = None,
+    updated_to: date | None = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
 ) -> Page[ArticleAdminOut]:
-    del author_id
+    opened, closed = edition_window(updated_from, updated_to)
+    term = q.strip() if q else ""
     return await ArticleService(db).list_admin(
-        staff, paging, status=status_, locale=locale, section_id=section_id
+        staff,
+        paging,
+        status=status_,
+        locale=locale,
+        section_id=section_id,
+        author_id=author_id,
+        tag_id=tag_id,
+        reviewed_by=reviewed_by,
+        updated_from=opened,
+        updated_to=closed,
+        q=term or None,
     )
 
 

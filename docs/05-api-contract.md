@@ -68,7 +68,7 @@ the JSON API over HTTP.
 
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
-| GET | `/articles` | `article.read` (or own) | Dashboard list, filters: `status`, `locale`, `section_id`, `author_id` |
+| GET | `/articles` | `article.read` (or own) | Desk list, filters: `status`, `locale`, `section_id`, `author_id`, `tag_id`, `reviewed_by`, `updated_from`, `updated_to`, `q` |
 | POST | `/articles` | `article.create` | Create article + first localization + first revision |
 | GET | `/articles/{article_id}` | `article.read` (or own) | Article with all localizations |
 | PATCH | `/articles/{article_id}` | `article.edit` (or own) | Language-neutral metadata (`lock_version`) |

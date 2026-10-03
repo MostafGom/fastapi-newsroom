@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
@@ -110,6 +110,81 @@ def _public_article_options(article_loader):
             ArticleLocalization.corrections
         ),
     )
+
+
+def edition_window(start: date | None, end: date | None) -> tuple[datetime | None, datetime | None]:
+    """Inclusive calendar dates as a half-open UTC range on ``updated_at``."""
+    opened = datetime.combine(start, time.min, tzinfo=UTC) if start is not None else None
+    closed = (
+        datetime.combine(end + timedelta(days=1), time.min, tzinfo=UTC) if end is not None else None
+    )
+    return opened, closed
+
+
+def _like(term: str):
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _edition_visible(
+    *,
+    status: ArticleStatus | None,
+    locale: str | None,
+    reviewed_by: uuid.UUID | None,
+    updated_from: datetime | None,
+    updated_to: datetime | None,
+    q: str | None,
+):
+    visible = ArticleLocalization.deleted_at.is_(None)
+    if status is not None:
+        visible = and_(visible, ArticleLocalization.status == status)
+    if locale is not None:
+        visible = and_(visible, ArticleLocalization.locale == locale)
+    if reviewed_by is not None:
+        visible = and_(visible, ArticleLocalization.reviewed_by == reviewed_by)
+    if updated_from is not None:
+        visible = and_(visible, ArticleLocalization.updated_at >= updated_from)
+    if updated_to is not None:
+        visible = and_(visible, ArticleLocalization.updated_at < updated_to)
+    if q:
+        pattern = _like(q)
+        title = (
+            select(ArticleRevision.id)
+            .where(
+                ArticleRevision.id == ArticleLocalization.current_revision_id,
+                ArticleRevision.title.ilike(pattern, escape="\\"),
+            )
+            .exists()
+        )
+        visible = and_(visible, or_(ArticleLocalization.slug.ilike(pattern, escape="\\"), title))
+    return visible
+
+
+def _edition_matches(
+    item: LocalizationSummaryOut,
+    *,
+    status: ArticleStatus | None,
+    locale: str | None,
+    reviewed_by: uuid.UUID | None,
+    updated_from: datetime | None,
+    updated_to: datetime | None,
+    q: str | None,
+) -> bool:
+    if status is not None and item.status is not status:
+        return False
+    if locale is not None and item.locale != locale:
+        return False
+    if reviewed_by is not None and item.reviewed_by != reviewed_by:
+        return False
+    if updated_from is not None and item.updated_at < updated_from:
+        return False
+    if updated_to is not None and item.updated_at >= updated_to:
+        return False
+    if q:
+        needle = q.casefold()
+        if needle not in item.title.casefold() and needle not in item.slug.casefold():
+            return False
+    return True
 
 
 class ArticleService:
@@ -445,6 +520,8 @@ class ArticleService:
             raise Conflict("A takedown reason code is required")
         before = localization.status.value
         self._apply_transition(localization, payload)
+        if edge.permission in {Perm.ARTICLE_REVIEW, Perm.ARTICLE_PUBLISH, Perm.ARTICLE_UNPUBLISH}:
+            localization.reviewed_by = actor.user.id
         record_event(
             self.db,
             actor_id=actor.user.id,
@@ -549,14 +626,23 @@ class ArticleService:
         status: ArticleStatus | None,
         locale: str | None,
         section_id: uuid.UUID | None,
+        author_id: uuid.UUID | None = None,
+        tag_id: uuid.UUID | None = None,
+        reviewed_by: uuid.UUID | None = None,
+        updated_from: datetime | None = None,
+        updated_to: datetime | None = None,
+        q: str | None = None,
     ) -> Page[ArticleAdminOut]:
         if actor.user.kind is not UserKind.STAFF:
             return Page(items=[], next_cursor=None)
-        visible = ArticleLocalization.deleted_at.is_(None)
-        if status is not None:
-            visible = and_(visible, ArticleLocalization.status == status)
-        if locale is not None:
-            visible = and_(visible, ArticleLocalization.locale == locale)
+        visible = _edition_visible(
+            status=status,
+            locale=locale,
+            reviewed_by=reviewed_by,
+            updated_from=updated_from,
+            updated_to=updated_to,
+            q=q,
+        )
         stmt = (
             select(Article)
             .where(Article.localizations.any(visible))
@@ -569,6 +655,10 @@ class ArticleService:
         )
         if section_id is not None:
             stmt = stmt.where(Article.section_id == section_id)
+        if author_id is not None:
+            stmt = stmt.where(Article.article_authors.any(ArticleAuthor.author_id == author_id))
+        if tag_id is not None:
+            stmt = stmt.where(Article.article_tags.any(ArticleTag.tag_id == tag_id))
         scope = actor.grants.sections_with(Perm.ARTICLE_READ)
         if scope is not None:
             own = Article.created_by == actor.user.id
@@ -589,18 +679,21 @@ class ArticleService:
             if not self._can_read(actor, article):
                 continue
             out = self._admin_from(article)
-            if not out.localizations:
-                continue
-            if status is not None or locale is not None:
-                out.localizations = [
-                    item
-                    for item in out.localizations
-                    if (status is None or item.status is status)
-                    and (locale is None or item.locale == locale)
-                ]
-                if not out.localizations:
-                    continue
-            items.append(out)
+            out.localizations = [
+                item
+                for item in out.localizations
+                if _edition_matches(
+                    item,
+                    status=status,
+                    locale=locale,
+                    reviewed_by=reviewed_by,
+                    updated_from=updated_from,
+                    updated_to=updated_to,
+                    q=q,
+                )
+            ]
+            if out.localizations:
+                items.append(out)
         return Page(items=items, next_cursor=next_cursor)
 
     async def get_admin(self, actor: Principal, article_id: uuid.UUID) -> ArticleAdminOut:
@@ -1039,6 +1132,10 @@ class ArticleService:
             and localization.published_revision_id is not None,
             update_requested_at=localization.update_requested_at,
             legal_hold=localization.legal_hold,
+            reviewed_by=localization.reviewed_by,
+            # Server onupdate expires this column after commit. Reading the attribute
+            # would lazy-load outside the greenlet.
+            updated_at=localization.__dict__.get("updated_at") or utcnow(),
             lock_version=localization.lock_version,
         )
 

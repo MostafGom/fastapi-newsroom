@@ -1,0 +1,83 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ _("desk.stories") }} · {{ _("admin.title") }}{% endblock %}
+{% block content %}
+<div class="panel-head">
+  <div>
+    <h1 class="desk-title">{{ _("desk.stories") }}</h1>
+    <p class="lede">{{ _("guide.stories") }}</p>
+  </div>
+  {% if staff.grants.has_anywhere(perms.ARTICLE_CREATE) %}
+    <a class="btn-line" href="/admin/stories/new">{{ _("desk.new") }}</a>
+  {% endif %}
+</div>
+<form class="desk-filters" method="get" action="/admin/stories">
+    <label class="field">{{ _("desk.filter.search") }}
+      <input name="q" value="{{ filters.q }}">
+    </label>
+    <label class="field">{{ _("desk.filter.status") }}
+      <select name="status">
+        <option value="">{{ _("manage.all") }}</option>
+        {% for status in statuses %}
+          <option value="{{ status.value }}" {% if filters.status == status.value %}selected{% endif %}>{{ _("desk.status." ~ status.value) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">{{ _("desk.locale") }}
+      <select name="locale">
+        <option value="">{{ _("manage.all") }}</option>
+        {% for code in supported_locales %}
+          <option value="{{ code }}" {% if filters.locale == code %}selected{% endif %}>{{ _("locale." ~ code) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">{{ _("desk.section") }}
+      <select name="section_id">
+        <option value="">{{ _("manage.all") }}</option>
+        {% for section_id, name in sections %}
+          <option value="{{ section_id }}" {% if filters.section_id == section_id|string %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">{{ _("desk.tags") }}
+      <select name="tag_id">
+        <option value="">{{ _("manage.all") }}</option>
+        {% for tag_id, name in tags %}
+          <option value="{{ tag_id }}" {% if filters.tag_id == tag_id|string %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">{{ _("desk.filter.writer") }}
+      <select name="author_id">
+        <option value="">{{ _("manage.all") }}</option>
+        {% for author in authors %}
+          <option value="{{ author.id }}" {% if filters.author_id == author.id|string %}selected{% endif %}>{{ author.display_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">{{ _("desk.filter.editor") }}
+      <select name="reviewed_by">
+        <option value="">{{ _("manage.all") }}</option>
+        {% for editor_id, name in editors %}
+          <option value="{{ editor_id }}" {% if filters.reviewed_by == editor_id|string %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">{{ _("desk.filter.from") }}
+      <input type="date" name="updated_from" value="{{ filters.updated_from }}">
+    </label>
+    <label class="field">{{ _("desk.filter.to") }}
+      <input type="date" name="updated_to" value="{{ filters.updated_to }}">
+    </label>
+  <button class="btn-line" type="submit">{{ _("manage.filter") }}</button>
+</form>
+<div id="listing">
+  {% if stories %}
+    <ul id="listing-items" class="desk-editions">
+      {% include "admin/partials/desk_stories.html" %}
+    </ul>
+  {% else %}
+    <p class="meta">{{ _("desk.empty") }}</p>
+  {% endif %}
+  {% include "partials/pager.html" %}
+</div>
+{% endblock %}

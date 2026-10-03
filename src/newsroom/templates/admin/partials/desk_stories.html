@@ -1,6 +1,16 @@
 {% for story in stories %}
-<li class="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-2">
-  <a class="font-bold text-ink no-underline" href="/admin/stories/{{ story.localization_id }}">{{ story.title }}</a>
-  <span class="text-sm text-muted">{{ _("locale." ~ story.locale) }} · {{ _("desk.status." ~ story.status) }}</span>
+<li class="desk-edition">
+  <a class="desk-edition-title" href="/admin/stories/{{ story.localization_id }}">{{ story.title }}</a>
+  <ul class="desk-facts">
+    <li>{{ story.section }}</li>
+    <li>{{ _("locale." ~ story.locale) }}</li>
+    <li>{{ _("desk.status." ~ story.status) }}</li>
+    {% if story.bylines %}
+      <li>{% for name in story.bylines %}{{ name }}{% if not loop.last %}{{ "، " if direction == "rtl" else ", " }}{% endif %}{% endfor %}</li>
+    {% endif %}
+    {% if story.editor %}<li>{{ story.editor }}</li>{% endif %}
+    <li><time datetime="{{ story.updated_at.isoformat() }}">{{ format_date(story.updated_at, locale) }}</time></li>
+    {% if story.legal_hold %}<li class="desk-hold">{{ _("desk.hold") }}</li>{% endif %}
+  </ul>
 </li>
 {% endfor %}
