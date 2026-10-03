@@ -83,6 +83,8 @@
   "editor.placeholder": "اكتب المادة…",
   "editor.toolbar": "التنسيق",
   "editor.direction": "اتجاه النص",
+  "editor.rtl": "من اليمين",
+  "editor.ltr": "من اليسار",
   "editor.preview": "معاينة",
   "desk.stories": "المواد",
   "desk.filter.search": "العنوان أو المسار",

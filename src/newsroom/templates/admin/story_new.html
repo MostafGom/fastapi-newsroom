@@ -1,12 +1,12 @@
 {% extends "admin/base.html" %}
 {% block title %}{{ _("desk.new") }} · {{ _("admin.title") }}{% endblock %}
 {% block content %}
-<div class="mb-4 flex items-center justify-between gap-4">
+<div class="panel-head">
   <div>
-    <h1 class="text-2xl font-bold">{{ _("desk.new") }}</h1>
+    <h1 class="desk-title">{{ _("desk.new") }}</h1>
     <p class="lede">{{ _("guide.new") }}</p>
   </div>
-  <nav class="flex gap-3 text-sm" aria-label="{{ _('desk.locale') }}">
+  <nav class="desk-locales" aria-label="{{ _('desk.locale') }}">
     <a href="/admin/stories/new?locale=ar" {% if chosen_locale == "ar" %}class="font-bold" aria-current="page"{% endif %}>{{ _("locale.ar") }}</a>
     <a href="/admin/stories/new?locale=en" {% if chosen_locale == "en" %}class="font-bold" aria-current="page"{% endif %}>{{ _("locale.en") }}</a>
   </nav>
@@ -37,13 +37,13 @@
     <input name="slug" required dir="ltr" value="{{ form.slug or '' }}">
   </label>
   <label class="field">{{ _("desk.title") }}
-    <input name="title" required value="{{ form.title or '' }}">
+    <input name="title" required dir="{{ editor_dir }}" data-writing value="{{ form.title or '' }}">
   </label>
   <label class="field">{{ _("desk.subtitle") }}
-    <input name="subtitle" value="{{ form.subtitle or '' }}">
+    <input name="subtitle" dir="{{ editor_dir }}" data-writing value="{{ form.subtitle or '' }}">
   </label>
   <label class="field">{{ _("desk.excerpt") }}
-    <textarea name="excerpt" rows="2">{{ form.excerpt or '' }}</textarea>
+    <textarea name="excerpt" rows="2" dir="{{ editor_dir }}" data-writing>{{ form.excerpt or '' }}</textarea>
   </label>
   {% if authors %}
     <fieldset>

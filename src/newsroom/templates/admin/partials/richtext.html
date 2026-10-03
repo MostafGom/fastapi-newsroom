@@ -11,6 +11,10 @@
       <button type="button" data-cmd="{{ cmd }}"
               class="min-w-8 border border-line bg-card px-2 py-1 text-sm hover:bg-paper">{{ label }}</button>
     {% endfor %}
+    <button type="button" data-cmd="dir" data-value="rtl"
+            aria-pressed="{{ 'true' if editor_dir == 'rtl' else 'false' }}">{{ _("editor.rtl") }}</button>
+    <button type="button" data-cmd="dir" data-value="ltr"
+            aria-pressed="{{ 'true' if editor_dir == 'ltr' else 'false' }}">{{ _("editor.ltr") }}</button>
   </div>
   <div data-editor class="min-h-64"></div>
   <textarea class="hidden" name="body">{{ body_json|default("", true) }}</textarea>

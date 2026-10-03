@@ -1243,7 +1243,9 @@ input[type="file"]::file-selector-button:hover {
   cursor: pointer;
 }
 
-[role="toolbar"] button:hover {
+[role="toolbar"] button:hover,
+[role="toolbar"] button[aria-pressed="true"] {
+  border-color: var(--color-ink);
   background: var(--color-paper);
 }
 
