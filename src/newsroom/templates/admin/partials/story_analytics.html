@@ -1,0 +1,38 @@
+<h2>{{ _("analytics.story") }}</h2>
+<p class="lede mb-3">{{ _("analytics.story_lede") }}</p>
+{% if report is none %}
+  <p role="status">{{ _("analytics.unavailable") }}</p>
+{% else %}
+  <h3 class="stat-label">{{ _("analytics.days7") }}</h3>
+  {% with headline=report.week %}
+    {% include "admin/partials/analytics_headline.html" %}
+  {% endwith %}
+  <h3 class="stat-label">{{ _("analytics.days28") }}</h3>
+  {% with headline=report.month %}
+    {% include "admin/partials/analytics_headline.html" %}
+  {% endwith %}
+  <ul class="stat-row">
+    <li class="stat"><strong>{{ report.comments }}</strong><span>{{ _("analytics.comments") }}</span></li>
+    <li class="stat"><strong>{{ report.bookmarks }}</strong><span>{{ _("analytics.bookmarks") }}</span></li>
+  </ul>
+  <h3 class="stat-label">{{ _("analytics.referrers") }}</h3>
+  {% if report.referrers %}
+    <ul class="metric-list">
+      {% for item in report.referrers %}
+        <li><span>{{ _("analytics.referrer." ~ item.key) }}</span><span>{{ item.views }}</span></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="lede">{{ _("analytics.none") }}</p>
+  {% endif %}
+  <h3 class="stat-label">{{ _("analytics.daily") }}</h3>
+  {% with days=report.days_7 %}
+    {% include "admin/partials/analytics_days.html" %}
+  {% endwith %}
+  <details class="mt-3">
+    <summary>{{ _("analytics.days28") }}</summary>
+    {% with days=report.days_28 %}
+      {% include "admin/partials/analytics_days.html" %}
+    {% endwith %}
+  </details>
+{% endif %}

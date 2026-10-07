@@ -1,19 +1,40 @@
 import os
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import asyncpg
 import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi import Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from newsroom.core.config import Settings, get_settings
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _analytics_test_url(base: Settings) -> str:
+    from sqlalchemy.engine.url import make_url
+
+    if base.test_analytics_database_url is not None:
+        chosen = str(base.test_analytics_database_url)
+    elif base.test_database_url is not None:
+        chosen = (
+            make_url(str(base.test_database_url))
+            .set(database="newsroom_analytics_test")
+            .render_as_string(hide_password=False)
+        )
+    else:
+        raise RuntimeError("TEST_DATABASE_URL must be set (see .env.example)")
+    if chosen == str(base.analytics_database_url):
+        raise RuntimeError("analytics test database must differ from ANALYTICS_DATABASE_URL")
+    return chosen
 
 
 def _configure_test_env() -> Settings:
@@ -24,6 +45,8 @@ def _configure_test_env() -> Settings:
         raise RuntimeError("TEST_DATABASE_URL must differ from DATABASE_URL")
     os.environ.update(
         DATABASE_URL=str(base.test_database_url),
+        ANALYTICS_DATABASE_URL=_analytics_test_url(base),
+        ANALYTICS_FLUSH_SECONDS="0",
         ENVIRONMENT="test",
         COOKIE_SECURE="false",
         LOG_JSON="false",
@@ -49,6 +72,36 @@ def _run_migrations(connection: object) -> None:
     config.attributes["connection"] = connection
     config.attributes["configure_logger"] = False
     command.upgrade(config, "head")
+
+
+def _run_analytics_migrations(connection: object) -> None:
+    config = Config(str(ROOT / "alembic_analytics.ini"))
+    config.attributes["connection"] = connection
+    config.attributes["configure_logger"] = False
+    command.upgrade(config, "head")
+
+
+async def _ensure_database(url: str) -> None:
+    parsed = make_url(url)
+    name = parsed.database or ""
+    owner = parsed.username or ""
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+        raise RuntimeError("refusing to create this database name")
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", owner) is None:
+        raise RuntimeError("refusing to create a database for this role")
+    conn = await asyncpg.connect(
+        user=owner,
+        password=parsed.password,
+        host=parsed.host or "localhost",
+        port=parsed.port or 5432,
+        database="postgres",
+    )
+    try:
+        exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", name)
+        if not exists:
+            await conn.execute(f'CREATE DATABASE "{name}" OWNER "{owner}"')
+    finally:
+        await conn.close()
 
 
 @pytest.fixture(scope="session")
@@ -93,9 +146,40 @@ async def db(connection: AsyncConnection) -> AsyncIterator[AsyncSession]:
     await session.close()
 
 
+@pytest.fixture(scope="session")
+async def analytics_engine(settings: Settings) -> AsyncIterator[AsyncEngine]:
+    await _ensure_database(str(settings.analytics_database_url))
+    engine = create_async_engine(str(settings.analytics_database_url))
+    async with engine.begin() as conn:
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+    async with engine.begin() as conn:
+        await conn.run_sync(_run_analytics_migrations)
+    from newsroom.analytics.partitions import ensure_partitions
+
+    async with AsyncSession(engine) as db:
+        await ensure_partitions(db)
+        await db.commit()
+    yield engine
+    await engine.dispose()
+
+
 @pytest.fixture
-async def client(db: AsyncSession, settings: Settings) -> AsyncIterator[AsyncClient]:
+async def client(
+    db: AsyncSession, settings: Settings, analytics_engine: AsyncEngine
+) -> AsyncIterator[AsyncClient]:
+    from newsroom.analytics.ingest import EventBuffer
+    from newsroom.core.db import create_sessionmaker
+
     app = create_app(settings)
+    app.state.analytics_engine = analytics_engine
+    app.state.analytics_sessionmaker = create_sessionmaker(analytics_engine)
+    app.state.analytics_buffer = EventBuffer(
+        app.state.analytics_sessionmaker,
+        flush_seconds=settings.analytics_flush_seconds,
+        flush_size=settings.analytics_flush_size,
+        rate_limit=settings.analytics_rate_limit_per_minute,
+    )
 
     async def override_db(request: Request) -> AsyncIterator[AsyncSession]:
         from newsroom.core.site import load_site_context

@@ -112,13 +112,56 @@ The same command publishes one fixture story in Arabic and English, leaves one s
 CREATE ROLE newsroom LOGIN PASSWORD '...';
 CREATE DATABASE newsroom OWNER newsroom;
 CREATE DATABASE newsroom_test OWNER newsroom;
+CREATE DATABASE newsroom_analytics OWNER newsroom;
+CREATE DATABASE newsroom_analytics_test OWNER newsroom;
+```
+
+Traffic events and rollups live in `newsroom_analytics`, not in `newsroom`. After the editorial
+migrations, apply the analytics history too:
+
+```bash
+uv run alembic -c alembic_analytics.ini upgrade head
 ```
 
 ### Docker
 
-`docker compose up --build` runs migrations, then the web app and worker, against the database
-set in `DOCKER_DATABASE_URL` (see `.env.example`). Add `--profile db` to also start a bundled
-Postgres for a clean clone.
+Containers do not use `DATABASE_URL`. They use `DOCKER_DATABASE_URL` and
+`DOCKER_ANALYTICS_DATABASE_URL`, because `localhost` inside a container is the container.
+
+**Host database** (Postgres already listening on port 5433):
+
+```bash
+docker compose up --build
+```
+
+This does not start a database. It builds the image, then:
+
+1. `migrate` applies the editorial schema (`alembic upgrade head`) and the analytics schema
+   (`alembic -c alembic_analytics.ini upgrade head`).
+2. `web` listens on port 8000 and `worker` starts. Both wait until `migrate` exits 0.
+
+The four databases in the SQL block above must already exist on that server. Create them
+yourself; `docker/postgres/01-databases.sh` is not used in this mode.
+
+**Bundled Postgres** (no host database):
+
+```bash
+DOCKER_DATABASE_URL=postgresql+asyncpg://newsroom:newsroom@db:5432/newsroom \
+DOCKER_ANALYTICS_DATABASE_URL=postgresql+asyncpg://newsroom:newsroom@db:5432/newsroom_analytics \
+  docker compose --profile db up --build
+```
+
+This starts one more service, `db` (Postgres 18), published on host port **5434** so it does
+not take 5433. On the first start of an empty `pgdata` volume the image creates the
+`newsroom` role and the `newsroom` database, then runs
+[`docker/postgres/01-databases.sh`](docker/postgres/01-databases.sh), which creates
+`newsroom_test`, `newsroom_analytics`, and `newsroom_analytics_test`, owned by `newsroom`.
+That script is a Postgres init script: it runs only while the data directory is empty.
+Later starts leave the databases as they are. `migrate` still applies the schema, and it
+waits until `db` is accepting connections.
+
+`docker compose --profile db down -v` deletes the volume. The next start runs the init
+script again and the data is gone.
 
 ## Commands
 
@@ -127,6 +170,7 @@ Postgres for a clean clone.
 | `uv run pytest` | Tests (uses `TEST_DATABASE_URL`, rebuilt from migrations on every run) |
 | `uv run ruff check . && uv run ruff format .` | Lint and format |
 | `uv run pyright` | Type check |
+| `uv run alembic -c alembic_analytics.ini upgrade head` | Analytics database migrations |
 | `uv run alembic revision --autogenerate -m "..."` | New migration (review it before committing) |
 | `uv run newsroom create-api-token --email ... --name ...` | Bearer token for a staff user |
 
@@ -142,7 +186,9 @@ src/newsroom/
   web/         HTML routers (public, admin) + Jinja setup
   templates/ static/ messages/   UI, vendored htmx/alpine, ar/en UI strings
   worker/      background job loop
-migrations/    Alembic
+  analytics/   traffic events and rollups (separate database)
+migrations/    Alembic for the editorial database
+migrations_analytics/  Alembic for newsroom_analytics
 tests/         unit/ (pure logic) and integration/ (HTTP + DB, rolled back per test)
 ```
 

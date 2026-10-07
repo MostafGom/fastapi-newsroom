@@ -63,6 +63,12 @@
 {% else %}
   <p class="mb-4 text-sm text-muted" dir="ltr">{{ story.slug }}</p>
 {% endif %}
+{% if can_view_analytics %}
+<section class="panel mb-4" hx-get="/admin/stories/{{ story.id }}/analytics" hx-trigger="load" hx-swap="innerHTML">
+  <h2>{{ _("analytics.story") }}</h2>
+  <p class="lede">{{ _("analytics.loading") }}</p>
+</section>
+{% endif %}
 {% set autosave_url = "/api/v1/admin/localizations/" ~ story.id ~ "/revisions" %}
 <section class="panel">
   <h2>{{ _("editor.title") }}</h2>
@@ -328,10 +334,9 @@
       <label class="field">{{ _("desk.excerpt") }}
         <textarea name="excerpt" rows="2"></textarea>
       </label>
-      <div class="overflow-hidden rounded-md border border-line bg-card" data-richtext data-dir="{{ translation_dir }}" data-placeholder="{{ _('editor.placeholder') }}">
-        <div data-editor class="min-h-40"></div>
-        <textarea class="hidden" name="body">{{ empty_body }}</textarea>
-      </div>
+      {% with editor_dir=translation_dir, body_json=empty_body, autosave_url='', editor_locale=missing_locales[0] %}
+        {% include "admin/partials/richtext.html" %}
+      {% endwith %}
       <button class="btn" type="submit">{{ _("desk.add_translation") }}</button>
     </form>
   </section>

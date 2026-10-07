@@ -7,4 +7,5 @@
   <article class="article-body mt-6">{{ page.body_html|safe }}</article>
 </main>
 {% include "public/partials/footer.html" %}
+{% if track_token %}{% include "public/partials/track.html" %}{% endif %}
 {% endblock %}

@@ -1,23 +1,29 @@
-# Containers cannot reach the host's "localhost", so they read DOCKER_DATABASE_URL instead of
-# DATABASE_URL. Default: the Postgres already running on the host at port 5433.
-#   docker compose up --build
+# What `docker compose up --build` does: build the app image, run editorial then analytics
+# migrations, then start the web app on port 8000 and the worker. It does not start Postgres.
+# Containers cannot reach the host's "localhost", so they read DOCKER_DATABASE_URL and
+# DOCKER_ANALYTICS_DATABASE_URL (host Postgres on port 5433). See README, Docker.
 #
-# Standalone (fresh clone, no host database): also start a bundled Postgres.
-#   DOCKER_DATABASE_URL=postgresql+asyncpg://newsroom:newsroom@db:5432/newsroom \
-#     docker compose --profile db up --build
+# `docker compose --profile db up --build` also starts Postgres 18. On the first start of an
+# empty volume, docker/postgres/01-databases.sh creates the test and analytics databases.
+# Point the DOCKER_* URLs at db:5432 for that mode (password newsroom). Host port is 5434.
 
 x-app: &app
   build: .
   env_file: .env
   environment:
     DATABASE_URL: ${DOCKER_DATABASE_URL:?Set DOCKER_DATABASE_URL in .env}
+    ANALYTICS_DATABASE_URL: ${DOCKER_ANALYTICS_DATABASE_URL:?Set DOCKER_ANALYTICS_DATABASE_URL in .env}
   extra_hosts:
     - "host.docker.internal:host-gateway"
 
 services:
   migrate:
     <<: *app
-    command: ["alembic", "upgrade", "head"]
+    command: ["sh", "-c", "alembic upgrade head && alembic -c alembic_analytics.ini upgrade head"]
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
 
   web:
     <<: *app
@@ -45,6 +51,7 @@ services:
       - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql
+      - ./docker/postgres/01-databases.sh:/docker-entrypoint-initdb.d/01-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U newsroom"]
       interval: 5s

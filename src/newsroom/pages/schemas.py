@@ -37,6 +37,7 @@ class PageAdminOut(Schema):
 
 
 class PagePublicOut(Schema):
+    id: uuid.UUID
     key: str
     title: str
     slug: str

@@ -1,5 +1,6 @@
 import Alpine from "alpinejs";
 import htmx from "htmx.org";
+import { mountAnalytics } from "./analytics.js";
 import "./main.css";
 
 window.htmx = htmx;
@@ -20,6 +21,7 @@ async function boot(root) {
 
 document.addEventListener("DOMContentLoaded", () => {
   boot(document);
+  mountAnalytics(document);
   Alpine.start();
 });
 

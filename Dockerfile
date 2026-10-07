@@ -17,10 +17,11 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
-COPY README.md alembic.ini ./
+COPY README.md alembic.ini alembic_analytics.ini ./
 COPY src ./src
 COPY --from=assets /app/src/newsroom/static/dist ./src/newsroom/static/dist
 COPY migrations ./migrations
+COPY migrations_analytics ./migrations_analytics
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

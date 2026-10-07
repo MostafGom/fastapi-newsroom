@@ -375,6 +375,13 @@ html {
   font-size: 0.9em;
 }
 
+.article-body pre {
+  margin-block: 1rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  background: var(--color-card);
+}
+
 .correction {
   font-family: var(--font-ui);
   border-inline-start: 3px solid var(--color-accent);
@@ -1249,6 +1256,43 @@ input[type="file"]::file-selector-button:hover {
   background: var(--color-paper);
 }
 
+[role="toolbar"] button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.editor-count {
+  margin: 0;
+  padding: 0.35rem 0.75rem 0.55rem;
+  border-top: 1px solid var(--color-line);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.link-dialog {
+  margin: auto;
+  width: min(28rem, calc(100vw - 2.5rem));
+  padding: 0.9rem;
+  border: 1px solid var(--color-ink);
+  background: var(--color-paper);
+}
+
+.link-dialog::backdrop {
+  background: rgb(28 25 23 / 72%);
+}
+
+.link-dialog .lede {
+  margin: 0 0 0.75rem;
+}
+
+.link-dialog-error {
+  margin: 0 0 0.75rem;
+  color: var(--color-accent);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+}
+
 .ProseMirror {
   min-height: 16rem;
   outline: none;
@@ -1282,6 +1326,12 @@ input[type="file"]::file-selector-button:hover {
   font-weight: 700;
   margin-block: 0.75rem 0.25rem;
 }
+.ProseMirror h4 {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-block: 0.75rem 0.25rem;
+}
 .ProseMirror p,
 .ProseMirror ul,
 .ProseMirror ol,
@@ -1300,6 +1350,22 @@ input[type="file"]::file-selector-button:hover {
 .ProseMirror a {
   color: var(--color-ink);
   text-decoration: underline;
+}
+.ProseMirror img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-block: 0.75rem;
+}
+.ProseMirror pre {
+  margin-block: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  background: var(--color-paper);
+}
+.ProseMirror code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
 }
 
 .flow {
@@ -1417,4 +1483,68 @@ input[type="file"]::file-selector-button:hover {
   .flow-cards {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.stat-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin-top: 0.9rem;
+}
+
+.stat-label {
+  margin: 0.9rem 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+}
+
+.stat strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.stat span,
+.metric-list span {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+.metric-list {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metric-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  padding: 0.45rem 0;
+  border-block-end: 1px solid var(--color-line);
+}
+
+.metric-list a {
+  color: inherit;
+  font-weight: 600;
 }

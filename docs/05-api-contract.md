@@ -58,6 +58,7 @@ the JSON API over HTTP.
 | GET | `/search` | Published stories (`q`, `section`, `tag`, `since`, `until`, `limit`, `cursor`) | `Page[SearchHit]`. Empty `q` with no filters returns an empty page. |
 | GET | `/articles` | Published articles (`section`, `tag`, `limit`, `cursor`) | `Page[ArticleSummaryOut]` |
 | GET | `/articles/{slug}` | Published article by slug in locale | `ArticleOut`; `301` if redirected slug; `410` if unpublished |
+| POST | `/collect` | Public beacon: a signed page token plus a view, engagement, or click. A staff cookie, a bad token, or a missing visitor cookie is ignored. | `204` |
 | GET | `/tags/{slug}/articles` | Articles by tag | `Page[ArticleSummaryOut]` |
 | POST | `/auth/login` | Reader or staff login (`audience` field) | `SessionOut` + cookie |
 | POST | `/auth/logout` | Revoke current session | `204` |

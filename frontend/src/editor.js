@@ -1,11 +1,158 @@
+import { Editor, Extension, InputRule } from "@tiptap/core";
+import CharacterCount from "@tiptap/extension-character-count";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
+import {
+  closeDoubleQuote,
+  closeSingleQuote,
+  emDash,
+  openDoubleQuote,
+  openSingleQuote,
+} from "@tiptap/extension-typography";
 import StarterKit from "@tiptap/starter-kit";
-import { Editor } from "@tiptap/core";
+import { Fragment, Slice } from "@tiptap/pm/model";
 
 const EMPTY = { type: "doc", content: [{ type: "paragraph" }] };
+
+const MARKS = new Set(["bold", "italic", "underline", "strike", "code", "link"]);
+
+const ACTIVE = {
+  bold: (editor) => editor.isActive("bold"),
+  italic: (editor) => editor.isActive("italic"),
+  underline: (editor) => editor.isActive("underline"),
+  strike: (editor) => editor.isActive("strike"),
+  code: (editor) => editor.isActive("code"),
+  h2: (editor) => editor.isActive("heading", { level: 2 }),
+  h3: (editor) => editor.isActive("heading", { level: 3 }),
+  h4: (editor) => editor.isActive("heading", { level: 4 }),
+  bullet: (editor) => editor.isActive("bulletList"),
+  ordered: (editor) => editor.isActive("orderedList"),
+  quote: (editor) => editor.isActive("blockquote"),
+  "code-block": (editor) => editor.isActive("codeBlock"),
+  link: (editor) => editor.isActive("link"),
+};
+
+export function allowedHref(href) {
+  if (typeof href !== "string") return false;
+  const value = href.trim();
+  if (!value || /\s/.test(value)) return false;
+  if (value.startsWith("/") && !value.startsWith("//")) return true;
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) return false;
+  if (parsed.protocol === "mailto:") return true;
+  return Boolean(parsed.host);
+}
+
+export function liftImages(node) {
+  if (!node || typeof node !== "object" || !Array.isArray(node.content)) return node;
+  const content = [];
+  for (const child of node.content) {
+    if (
+      child?.type === "paragraph" &&
+      Array.isArray(child.content) &&
+      child.content.some((item) => item?.type === "image")
+    ) {
+      let inline = [];
+      const flush = () => {
+        if (!inline.length) return;
+        content.push({ ...child, content: inline });
+        inline = [];
+      };
+      for (const item of child.content) {
+        if (item?.type === "image") {
+          flush();
+          content.push(item);
+        } else {
+          inline.push(item);
+        }
+      }
+      flush();
+    } else {
+      content.push(liftImages(child));
+    }
+  }
+  return { ...node, content };
+}
+
+function keepMark(mark) {
+  if (!MARKS.has(mark.type.name)) return false;
+  if (mark.type.name === "link") return allowedHref(mark.attrs.href || "");
+  return true;
+}
+
+function cleanNode(node) {
+  const marks = node.marks.filter((mark) => keepMark(mark));
+  if (node.isText) return node.mark(marks);
+  const children = [];
+  node.content.forEach((child) => {
+    children.push(cleanNode(child));
+  });
+  const content = Fragment.fromArray(children);
+  if (node.type.name === "heading" && ![2, 3, 4].includes(node.attrs.level)) {
+    return node.type.create({ ...node.attrs, level: 2 }, content, marks);
+  }
+  return node.copy(content).mark(marks);
+}
+
+function cleanPasted(slice) {
+  const children = [];
+  slice.content.forEach((node) => {
+    children.push(cleanNode(node));
+  });
+  return new Slice(Fragment.fromArray(children), slice.openStart, slice.openEnd);
+}
+
+function onlyWhenLtr(editor, rule) {
+  return new InputRule({
+    find: rule.find,
+    undoable: rule.undoable,
+    handler: (props) => {
+      if (editor.view.dom.getAttribute("dir") !== "ltr") return null;
+      return rule.handler(props);
+    },
+  });
+}
+
+const TypographyLtr = Extension.create({
+  name: "typographyLtr",
+  addInputRules() {
+    const editor = this.editor;
+    return [emDash(), openDoubleQuote(), closeDoubleQuote(), openSingleQuote(), closeSingleQuote()].map(
+      (rule) => onlyWhenLtr(editor, rule),
+    );
+  },
+});
+
+function wordCount(text) {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+function syncToolbar(editor, host) {
+  host.querySelectorAll("[data-cmd]").forEach((button) => {
+    const command = button.dataset.cmd;
+    if (command === "undo") {
+      button.disabled = !editor.can().undo();
+      return;
+    }
+    if (command === "redo") {
+      button.disabled = !editor.can().redo();
+      return;
+    }
+    const active = ACTIVE[command];
+    if (!active) return;
+    button.setAttribute("aria-pressed", active(editor) ? "true" : "false");
+  });
+  const count = host.querySelector("[data-word-count]");
+  if (!count) return;
+  const pattern = count.dataset.wordPattern || "{count}";
+  count.textContent = pattern.replaceAll("{count}", String(editor.storage.characterCount.words()));
+}
 
 const autosaveTimers = new WeakMap();
 
@@ -388,26 +535,78 @@ function applyDirection(editor, host, dir) {
   });
 }
 
+function bindLinkDialog(dialog) {
+  if (dialog.dataset.bound === "1") return;
+  dialog.dataset.bound = "1";
+  const input = dialog.querySelector("[data-link-input]");
+  const error = dialog.querySelector("[data-link-error]");
+  const apply = () => {
+    const href = input?.value.trim() || "";
+    if (href && !allowedHref(href)) {
+      if (error) error.hidden = false;
+      input?.focus();
+      return;
+    }
+    dialog.close(href ? "apply" : "remove");
+  };
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close("cancel");
+  });
+  dialog.querySelector("[data-link-apply]")?.addEventListener("click", apply);
+  dialog.querySelector("[data-link-remove]")?.addEventListener("click", () => dialog.close("remove"));
+  dialog.querySelector("[data-link-cancel]")?.addEventListener("click", () => dialog.close("cancel"));
+  input?.addEventListener("input", () => {
+    if (error) error.hidden = true;
+  });
+  input?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    apply();
+  });
+}
+
+function openLink(editor, host) {
+  const dialog = host.querySelector("[data-link-dialog]");
+  const input = dialog?.querySelector("[data-link-input]");
+  const error = dialog?.querySelector("[data-link-error]");
+  if (!dialog || !input || typeof dialog.showModal !== "function") return;
+  bindLinkDialog(dialog);
+  const { from, to } = editor.state.selection;
+  input.value = editor.getAttributes("link").href || "https://";
+  if (error) error.hidden = true;
+  const onClose = () => {
+    dialog.removeEventListener("close", onClose);
+    const action = dialog.returnValue;
+    if (action !== "apply" && action !== "remove") return;
+    const chain = editor.chain().focus().setTextSelection({ from, to });
+    if (action === "remove") chain.unsetLink().run();
+    else chain.setLink({ href: input.value.trim() }).run();
+  };
+  dialog.addEventListener("close", onClose);
+  dialog.showModal();
+  input.focus();
+  input.select();
+}
+
 function run(editor, command, host, button) {
   const chain = editor.chain().focus();
   const commands = {
+    undo: () => chain.undo().run(),
+    redo: () => chain.redo().run(),
     bold: () => chain.toggleBold().run(),
     italic: () => chain.toggleItalic().run(),
     underline: () => chain.toggleUnderline().run(),
     strike: () => chain.toggleStrike().run(),
+    code: () => chain.toggleCode().run(),
     h2: () => chain.toggleHeading({ level: 2 }).run(),
     h3: () => chain.toggleHeading({ level: 3 }).run(),
+    h4: () => chain.toggleHeading({ level: 4 }).run(),
     bullet: () => chain.toggleBulletList().run(),
     ordered: () => chain.toggleOrderedList().run(),
     quote: () => chain.toggleBlockquote().run(),
+    "code-block": () => chain.toggleCodeBlock().run(),
     rule: () => chain.setHorizontalRule().run(),
-    link: () => {
-      const previous = editor.getAttributes("link").href ?? "https://";
-      const href = window.prompt("URL", previous);
-      if (href === null) return;
-      if (href === "") chain.unsetLink().run();
-      else chain.setLink({ href }).run();
-    },
+    link: () => openLink(editor, host),
     image: () => openLibrary(editor, host),
     dir: () => applyDirection(editor, host, button?.dataset.value),
   };
@@ -426,7 +625,7 @@ export function mountEditors(root = document) {
     let content = EMPTY;
     if (input.value.trim()) {
       try {
-        content = JSON.parse(input.value);
+        content = liftImages(JSON.parse(input.value));
       } catch {
         content = EMPTY;
       }
@@ -435,11 +634,22 @@ export function mountEditors(root = document) {
     const editor = new Editor({
       element: surface,
       extensions: [
-        StarterKit.configure({ heading: { levels: [2, 3, 4] } }),
-        Underline,
-        Link.configure({ openOnClick: false, autolink: false }),
-        Image.configure({ inline: true }),
+        StarterKit.configure({
+          heading: { levels: [2, 3, 4] },
+          link: {
+            openOnClick: false,
+            autolink: true,
+            linkOnPaste: true,
+            defaultProtocol: "https",
+            protocols: ["http", "https", "mailto"],
+            isAllowedUri: (url) => allowedHref(url),
+            shouldAutoLink: (url) => allowedHref(url),
+          },
+        }),
+        Image.configure({ inline: false }),
         Placeholder.configure({ placeholder: host.dataset.placeholder || "" }),
+        CharacterCount.configure({ wordCounter: wordCount }),
+        TypographyLtr,
       ],
       content,
       editorProps: {
@@ -447,6 +657,7 @@ export function mountEditors(root = document) {
           dir: host.dataset.dir || "auto",
           class: "px-3 py-2",
         },
+        transformPasted: (slice) => cleanPasted(slice),
       },
       onUpdate: ({ editor: current }) => {
         input.value = JSON.stringify(current.getJSON());
@@ -454,6 +665,8 @@ export function mountEditors(root = document) {
       },
     });
     input.value = JSON.stringify(editor.getJSON());
+    editor.on("transaction", () => syncToolbar(editor, host));
+    syncToolbar(editor, host);
 
     host.querySelectorAll("[data-cmd]").forEach((button) => {
       button.addEventListener("click", (event) => {

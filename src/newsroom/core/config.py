@@ -27,9 +27,22 @@ class Settings(BaseSettings):
         default=PostgresDsn("postgresql+asyncpg://newsroom:newsroom@localhost:5433/newsroom")
     )
     test_database_url: PostgresDsn | None = None
+    analytics_database_url: PostgresDsn = Field(
+        default=PostgresDsn(
+            "postgresql+asyncpg://newsroom:newsroom@localhost:5433/newsroom_analytics"
+        )
+    )
+    test_analytics_database_url: PostgresDsn | None = None
     database_echo: bool = False
     database_pool_size: int = 5
     database_max_overflow: int = 10
+    analytics_pool_size: int = 2
+    analytics_max_overflow: int = 4
+    analytics_flush_seconds: float = 2.0
+    analytics_flush_size: int = 200
+    analytics_rate_limit_per_minute: int = 60
+    analytics_token_ttl_seconds: int = 30 * 60
+    analytics_raw_retention_days: int = 90
 
     secret_key: SecretStr = SecretStr("change-me")
 
@@ -42,6 +55,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     reader_session_cookie: str = "nr_session"
     staff_session_cookie: str = "nr_staff"
+    visitor_cookie: str = "nr_vid"
+    visitor_cookie_days: int = 400
     csrf_cookie: str = "nr_csrf"
     reader_session_ttl_hours: int = 24 * 30
     staff_session_ttl_hours: int = 12

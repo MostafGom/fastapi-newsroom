@@ -85,6 +85,7 @@ class LegalHoldActive(Conflict):
 @dataclass(slots=True)
 class PublicLookup:
     article: ArticleOut | None = None
+    localization_id: uuid.UUID | None = None
     redirect_slug: str | None = None
     gone: bool = False
 
@@ -376,6 +377,8 @@ class ArticleService:
         for revision in list(localization.revisions):
             await self.db.delete(revision)
         localization.revisions.clear()
+        await self.db.flush()
+        await self.db.refresh(article, attribute_names=["localizations"])
         if localization in article.localizations:
             article.localizations.remove(localization)
         await self.db.delete(localization)
@@ -787,7 +790,9 @@ class ArticleService:
             or localization.published_revision_id is None
         ):
             raise NotFound("Article not found")
-        return PublicLookup(article=self._public_out(localization, locale))
+        return PublicLookup(
+            article=self._public_out(localization, locale), localization_id=localization.id
+        )
 
     async def publish_due(self) -> int:
         """Publish due rows one transaction at a time so a replica can skip a locked row."""
