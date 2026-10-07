@@ -7,8 +7,9 @@ import signal
 import structlog
 
 import newsroom.models  # noqa: F401  (registers every mapper)
+from newsroom.analytics.jobs import ANALYTICS_JOBS
 from newsroom.core.config import get_settings
-from newsroom.core.db import create_engine, create_sessionmaker
+from newsroom.core.db import create_analytics_engine, create_engine, create_sessionmaker
 from newsroom.core.logging import configure_logging
 from newsroom.worker.jobs import JOBS
 
@@ -20,6 +21,8 @@ async def run() -> None:
     configure_logging(settings)
     engine = create_engine(settings)
     sessionmaker = create_sessionmaker(engine)
+    analytics_engine = create_analytics_engine(settings)
+    analytics_sessions = create_sessionmaker(analytics_engine)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -37,10 +40,19 @@ async def run() -> None:
                         log.info("job_done", job=name, affected=affected)
                 except Exception:
                     log.exception("job_failed", job=name)
+            for name, job in ANALYTICS_JOBS.items():
+                try:
+                    async with analytics_sessions() as db:
+                        affected = await job(db)
+                    if affected:
+                        log.info("job_done", job=name, affected=affected)
+                except Exception:
+                    log.exception("job_failed", job=name)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_seconds)
     finally:
         await engine.dispose()
+        await analytics_engine.dispose()
         log.info("worker_stopped")
 
 

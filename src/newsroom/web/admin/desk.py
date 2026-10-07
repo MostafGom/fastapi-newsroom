@@ -7,11 +7,14 @@ from datetime import UTC, date, datetime
 from typing import Annotated
 from urllib.parse import quote
 
+import structlog
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
+from newsroom.analytics.desk import DeskAnalytics
 from newsroom.articles.authors import AuthorService
 from newsroom.articles.body import InvalidBody
 from newsroom.articles.schemas import (
@@ -37,7 +40,7 @@ from newsroom.auth.dependencies import csrf_protect_web
 from newsroom.authz.dependencies import CurrentStaff
 from newsroom.authz.permissions import Perm
 from newsroom.comments.service import CommentService
-from newsroom.core.db import DbSession
+from newsroom.core.db import AnalyticsSession, DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
 from newsroom.taxonomy.schemas import SectionAdminOut, TagAdminOut
@@ -400,6 +403,31 @@ async def hide_story_comment(
     return RedirectResponse(f"/admin/stories/{localization_id}?notice=saved", status_code=303)
 
 
+@router.get("/stories/{localization_id}/analytics", response_class=HTMLResponse)
+async def story_analytics(
+    request: Request,
+    localization_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    analytics: AnalyticsSession,
+) -> HTMLResponse:
+    articles = ArticleService(db)
+    story = await articles.get_localization(staff, localization_id)
+    article = await articles.get_admin(staff, story.article_id)
+    if not staff.grants.has(Perm.ANALYTICS_READ, section_id=article.section_id):
+        raise PermissionDenied("You cannot view these analytics")
+    report = None
+    try:
+        report = await DeskAnalytics(db, analytics).story(story.id, article.id)
+    except SQLAlchemyError:
+        structlog.get_logger("newsroom.analytics").exception("analytics_story_failed")
+    return templates.TemplateResponse(
+        request,
+        "admin/partials/story_analytics.html",
+        {"story": story, "report": report},
+    )
+
+
 @router.get("/stories/{localization_id}", response_class=HTMLResponse)
 async def edit_story(
     request: Request,
@@ -642,6 +670,7 @@ async def _edit_context(
         "correction_kinds": list(CorrectionKind),
         "comments": await CommentService(db).list_public(localization_id, None),
         "can_hide_comments": staff.grants.has(Perm.ARTICLE_EDIT, section_id=article.section_id),
+        "can_view_analytics": staff.grants.has(Perm.ANALYTICS_READ, section_id=article.section_id),
     }
 
 

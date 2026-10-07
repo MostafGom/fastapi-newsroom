@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from newsroom.analytics.tokens import PageClaims, issue_page_token
 from newsroom.articles.service import ArticleService
 from newsroom.auth.dependencies import (
     CurrentReader,
@@ -51,13 +52,42 @@ LocaleParam = Annotated[str, Depends(supported_locale)]
 
 
 def _section_name(nodes, slug: str) -> str | None:
+    found = _section_node(nodes, slug)
+    return found.name if found is not None else None
+
+
+def _section_node(nodes, slug: str):
     for node in nodes:
         if node.slug == slug:
-            return node.name
-        found = _section_name(node.children, slug)
-        if found:
+            return node
+        found = _section_node(node.children, slug)
+        if found is not None:
             return found
     return None
+
+
+def _track(
+    locale: str,
+    surface: str,
+    *,
+    localization_id: uuid.UUID | None = None,
+    article_id: uuid.UUID | None = None,
+    section_id: uuid.UUID | None = None,
+    page_id: uuid.UUID | None = None,
+) -> str:
+    settings = get_settings()
+    return issue_page_token(
+        settings.secret_key.get_secret_value(),
+        PageClaims(
+            surface=surface,
+            locale=locale,
+            localization_id=localization_id,
+            article_id=article_id,
+            section_id=section_id,
+            page_id=page_id,
+        ),
+        ttl_seconds=settings.analytics_token_ttl_seconds,
+    )
 
 
 @router.get("/")
@@ -92,6 +122,7 @@ async def home(
         {
             "reader": reader,
             "articles": found.items,
+            "track_token": None if fragment else _track(locale, "home"),
             **pager_context(
                 path=f"/{locale}/",
                 page=page,
@@ -160,14 +191,22 @@ async def section(
         tag_slug=None,
     )
     sections = getattr(request.state, "nav_sections", [])
+    section_node = _section_node(sections, slug)
     return templates.TemplateResponse(
         request,
         "public/fragments/stories.html" if fragment else "public/home.html",
         {
             "reader": reader,
             "articles": found.items,
-            "heading": _section_name(sections, slug) or slug,
+            "heading": section_node.name if section_node is not None else slug,
             "current_section": slug,
+            "track_token": None
+            if fragment
+            else _track(
+                locale,
+                "section",
+                section_id=section_node.id if section_node is not None else None,
+            ),
             "empty_key": "home.empty",
             **pager_context(
                 path=f"/{locale}/section/{slug}",
@@ -208,6 +247,7 @@ async def tag(
             "articles": found.items,
             "heading": found_tag.name,
             "empty_key": "tag.empty",
+            "track_token": None if fragment else _track(locale, "tag"),
             **pager_context(
                 path=f"/{locale}/tag/{slug}",
                 page=page,
@@ -226,7 +266,11 @@ async def site_page(
     request: Request, locale: LocaleParam, slug: str, reader: OptionalReader, db: DbSession
 ) -> HTMLResponse:
     page = await PageService(db).get_public(locale, slug)
-    return templates.TemplateResponse(request, "public/page.html", {"reader": reader, "page": page})
+    return templates.TemplateResponse(
+        request,
+        "public/page.html",
+        {"reader": reader, "page": page, "track_token": _track(locale, "page", page_id=page.id)},
+    )
 
 
 @router.get("/{locale}/article/{slug}", response_class=HTMLResponse)
@@ -261,6 +305,13 @@ async def article(
             "comments": comments,
             "lead_alt": lead_alt,
             "lead_caption": lead_caption,
+            "track_token": _track(
+                locale,
+                "article",
+                localization_id=found.localization_id,
+                article_id=story.id,
+                section_id=story.section.id,
+            ),
         },
     )
 

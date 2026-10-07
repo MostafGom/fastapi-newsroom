@@ -29,6 +29,12 @@ async def test_editor_preview_renders_on_the_server(
     assert page.status_code == 200
     assert "data-richtext" in page.text
     assert 'data-dir="rtl"' in page.text
+    assert 'data-cmd="h4"' in page.text
+    assert 'data-cmd="undo"' in page.text
+    assert 'data-cmd="code-block"' in page.text
+    assert "data-word-count" in page.text
+    assert "data-link-dialog" in page.text
+    assert "اقتباس" in page.text
     csrf = CSRF_FIELD.search(page.text)
     assert csrf is not None
 

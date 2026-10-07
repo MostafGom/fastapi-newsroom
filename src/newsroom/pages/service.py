@@ -146,7 +146,11 @@ class PageService:
         if row is None or row.page is None:
             raise NotFound("Page not found")
         return PagePublicOut(
-            key=row.page.key, title=row.title, slug=row.slug, body_html=row.body_html
+            id=row.page.id,
+            key=row.page.key,
+            title=row.title,
+            slug=row.slug,
+            body_html=row.body_html,
         )
 
     async def _page(self, page_id: uuid.UUID) -> Page:

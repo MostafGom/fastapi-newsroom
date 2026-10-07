@@ -8,7 +8,7 @@ Check `git status` before editing. Do not assume the tree is clean, and do not r
 
 - Python 3.14, [uv](https://docs.astral.sh/uv/), FastAPI, SQLAlchemy 2.1 async + asyncpg, Alembic, Pydantic 2, pwdlib Argon2id, nh3, Pillow, structlog.
 - HTML: Jinja, HTMX, Alpine. Article body: TipTap JSON, rendered on the server. Styles: Tailwind v4, built by Vite in `frontend/`.
-- PostgreSQL 18 on the host, port **5433 only**. Role `newsroom` owns databases `newsroom` (app) and `newsroom_test` (pytest). Never point tests at the app database.
+- PostgreSQL 18 on the host, port **5433 only**. Role `newsroom` owns databases `newsroom` (app), `newsroom_test` (pytest), `newsroom_analytics` (traffic rollups), and `newsroom_analytics_test`. Never point tests at the app databases. `docker compose up` does not start Postgres; `--profile db` does, on host port 5434, and `docker/postgres/01-databases.sh` creates the three extra databases only on the first empty volume.
 - Copy `.env.example` to `.env`. Never commit `.env`, credentials, or media files. `SECRET_KEY` and database passwords stay in the environment.
 - Generated browser files live in `src/newsroom/static/dist/` and are gitignored. After a template class, CSS, or editor change, run `cd frontend && npm run build`.
 - Locales at launch: Arabic (default, RTL) and English. UI strings are `src/newsroom/messages/ar.json` and `en.json`. The desk renders in the staff member's preferred locale, Arabic unless that preference is English.

@@ -56,6 +56,59 @@ class RequestContextMiddleware:
             )
 
 
+class VisitorCookieMiddleware:
+    """Gives each public browser a random id. The beacon sends it back; it is not a user id."""
+
+    def __init__(self, app: ASGIApp, settings: Settings) -> None:
+        self.app = app
+        self.settings = settings
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("method") not in {"GET", "HEAD"}:
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path") or ""
+        existing = _cookie(scope, self.settings.visitor_cookie)
+        mint = _is_public_document(path) and not _valid_uuid(existing)
+
+        async def send_wrapper(message: Message) -> None:
+            if mint and message["type"] == "http.response.start" and message["status"] < 400:
+                secure = "; Secure" if self.settings.cookie_secure else ""
+                max_age = self.settings.visitor_cookie_days * 24 * 60 * 60
+                visitor = uuid.uuid4()
+                MutableHeaders(scope=message).append(
+                    "set-cookie",
+                    f"{self.settings.visitor_cookie}={visitor}; Path=/; Max-Age={max_age}; "
+                    f"HttpOnly; SameSite=Lax{secure}",
+                )
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+def _is_public_document(path: str) -> bool:
+    return not path.startswith(("/admin", "/api", "/static", "/media", "/healthz", "/readyz"))
+
+
+def _cookie(scope: Scope, name: str) -> str | None:
+    raw = dict(scope.get("headers") or []).get(b"cookie", b"").decode("latin-1")
+    for part in raw.split(";"):
+        key, _, value = part.strip().partition("=")
+        if key == name and value:
+            return value
+    return None
+
+
+def _valid_uuid(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 class CsrfCookieMiddleware:
     """Persists a CSRF token minted during the request (``request.state.new_csrf_token``)."""
 

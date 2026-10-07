@@ -13,9 +13,10 @@ from newsroom.auth.service import AuthService
 from newsroom.authz.permissions import SUPER_ADMIN_ROLE
 from newsroom.authz.seed import seed_rbac
 from newsroom.core.config import get_settings
-from newsroom.core.db import create_engine, create_sessionmaker
+from newsroom.core.db import create_analytics_engine, create_engine, create_sessionmaker
 from newsroom.core.errors import AppError
 from newsroom.locales.seed import seed_locales
+from newsroom.seed.analytics import seed_analytics
 from newsroom.seed.demo import seed_demo
 from newsroom.seed.volume import seed_volume
 from newsroom.users.repository import UserRepository
@@ -42,21 +43,40 @@ def run_with_db[T](fn: Callable[[AsyncSession], Awaitable[T]]) -> T:
 
 @app.command()
 def seed() -> None:
-    """Seed locales, roles, and demo accounts and stories (idempotent)."""
+    """Seed locales, roles, demo stories, and demo traffic.
 
-    async def job(db: AsyncSession) -> None:
-        added = await seed_locales(db)
-        result = await seed_rbac(db)
-        typer.echo(f"locales added: {added}")
-        typer.echo(f"permissions: {result.permissions}, system roles: {result.roles}")
-        if result.removed_permissions:
-            typer.echo(f"removed stale permissions: {', '.join(result.removed_permissions)}")
-        for line in await seed_demo(db):
-            typer.echo(line)
-        for line in await seed_volume(db):
-            typer.echo(line)
+    Replaces every row in the analytics database named by ANALYTICS_DATABASE_URL.
+    """
 
-    run_with_db(job)
+    async def job() -> None:
+        settings = get_settings()
+        engine = create_engine(settings)
+        analytics_engine = create_analytics_engine(settings)
+        try:
+            async with create_sessionmaker(engine)() as db:
+                added = await seed_locales(db)
+                result = await seed_rbac(db)
+                typer.echo(f"locales added: {added}")
+                typer.echo(f"permissions: {result.permissions}, system roles: {result.roles}")
+                if result.removed_permissions:
+                    removed = ", ".join(result.removed_permissions)
+                    typer.echo(f"removed stale permissions: {removed}")
+                for line in await seed_demo(db):
+                    typer.echo(line)
+                for line in await seed_volume(db):
+                    typer.echo(line)
+                async with create_sessionmaker(analytics_engine)() as analytics:
+                    for line in await seed_analytics(db, analytics):
+                        typer.echo(line)
+        finally:
+            await engine.dispose()
+            await analytics_engine.dispose()
+
+    try:
+        asyncio.run(job())
+    except AppError as exc:
+        typer.secho(f"Error: {exc.detail or exc.code}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command("create-superadmin")

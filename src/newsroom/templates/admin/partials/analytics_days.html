@@ -1,0 +1,8 @@
+<ul class="metric-list">
+  {% for row in days %}
+    <li>
+      <span>{{ format_date(row.bucket, locale) }}</span>
+      <span>{{ row.views }} {{ _("analytics.views") }} · {{ row.uniques }} {{ _("analytics.uniques") }} · {{ row.average_time }}</span>
+    </li>
+  {% endfor %}
+</ul>

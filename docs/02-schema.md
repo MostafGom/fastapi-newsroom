@@ -302,3 +302,10 @@ column, so the reason travels with the history.
   the save fails with `409 Conflict` and the client shows a diff.
 - **Metadata/status changes** use `lock_version` (`UPDATE ... WHERE lock_version = :v`).
 - **Scheduler** claims rows with `FOR UPDATE SKIP LOCKED`, so parallel workers never double-publish.
+
+## Analytics database
+
+Visits, engaged time, scroll, and explicit clicks are not columns on `article_localizations`.
+They live in a second database, `newsroom_analytics`, with its own Alembic history. The desk
+reads rollups from that database and loads titles, comments, and bookmarks from this one.
+See [ADR 0010](adr/0010-analytics-database.md).

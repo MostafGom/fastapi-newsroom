@@ -1,15 +1,22 @@
 <div class="overflow-hidden rounded-md border border-line bg-card" data-richtext
      data-dir="{{ editor_dir }}" data-locale="{{ editor_locale|default('', true) }}"
      data-placeholder="{{ _('editor.placeholder') }}"
-     {% if autosave_url is defined %}data-autosave="{{ autosave_url }}"{% endif %}>
+     {% if autosave_url %}data-autosave="{{ autosave_url }}"{% endif %}>
   <div class="flex flex-wrap gap-1 border-b border-line bg-paper p-1" role="toolbar" aria-label="{{ _('editor.toolbar') }}">
-    {% for cmd, label in [
-      ("bold", "B"), ("italic", "I"), ("underline", "U"), ("strike", "S"),
-      ("h2", "H2"), ("h3", "H3"), ("bullet", "List"), ("ordered", "1."),
-      ("quote", "Quote"), ("link", "Link"), ("image", "Image"), ("rule", "—")
+    {% for cmd, key in [("undo", "editor.undo"), ("redo", "editor.redo")] %}
+      <button type="button" data-cmd="{{ cmd }}" disabled>{{ _(key) }}</button>
+    {% endfor %}
+    {% for cmd, key in [
+      ("bold", "editor.bold"), ("italic", "editor.italic"), ("underline", "editor.underline"),
+      ("strike", "editor.strike"), ("code", "editor.code"),
+      ("h2", "editor.h2"), ("h3", "editor.h3"), ("h4", "editor.h4"),
+      ("bullet", "editor.bullet"), ("ordered", "editor.ordered"), ("quote", "editor.quote"),
+      ("code-block", "editor.code_block"), ("link", "editor.link")
     ] %}
-      <button type="button" data-cmd="{{ cmd }}"
-              class="min-w-8 border border-line bg-card px-2 py-1 text-sm hover:bg-paper">{{ label }}</button>
+      <button type="button" data-cmd="{{ cmd }}" aria-pressed="false">{{ _(key) }}</button>
+    {% endfor %}
+    {% for cmd, key in [("image", "editor.image"), ("rule", "editor.rule")] %}
+      <button type="button" data-cmd="{{ cmd }}">{{ _(key) }}</button>
     {% endfor %}
     <button type="button" data-cmd="dir" data-value="rtl"
             aria-pressed="{{ 'true' if editor_dir == 'rtl' else 'false' }}">{{ _("editor.rtl") }}</button>
@@ -17,5 +24,18 @@
             aria-pressed="{{ 'true' if editor_dir == 'ltr' else 'false' }}">{{ _("editor.ltr") }}</button>
   </div>
   <div data-editor class="min-h-64"></div>
+  <p class="editor-count" data-word-count data-word-pattern="{{ _('editor.words') }}">{{ _('editor.words', count=0) }}</p>
   <textarea class="hidden" name="body">{{ body_json|default("", true) }}</textarea>
+  <dialog class="link-dialog" data-link-dialog aria-label="{{ _('editor.link_label') }}">
+    <p class="lede">{{ _("editor.link_label") }}</p>
+    <label class="field">{{ _("editor.link_url") }}
+      <input data-link-input dir="ltr" autocomplete="off" spellcheck="false" inputmode="url">
+    </label>
+    <p class="link-dialog-error" data-link-error hidden>{{ _("editor.link_invalid") }}</p>
+    <div class="form-actions">
+      <button class="btn" type="button" data-link-apply>{{ _("editor.link_apply") }}</button>
+      <button class="btn-line" type="button" data-link-remove>{{ _("editor.link_remove") }}</button>
+      <button class="btn-quiet" type="button" data-link-cancel>{{ _("editor.link_cancel") }}</button>
+    </div>
+  </dialog>
 </div>

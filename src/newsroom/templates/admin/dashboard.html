@@ -4,6 +4,45 @@
 <h1 class="text-2xl font-bold">{{ _("admin.dashboard.welcome", name=staff.user.display_name or staff.user.email) }}</h1>
 {% if detail %}<p class="mt-4 text-accent" role="alert">{{ detail }}</p>{% endif %}
 <div class="desk-stack mt-6">
+  {% if staff.grants.has_anywhere(perms.ANALYTICS_READ) %}
+  <section class="panel">
+    <h2>{{ _("analytics.heading") }}</h2>
+    <p class="lede">{{ _("analytics.lede") }}</p>
+    {% if analytics_down or performance is none %}
+      <p class="mt-3" role="status">{{ _("analytics.unavailable") }}</p>
+    {% else %}
+      <div class="stat-groups">
+        <div>
+          <h3 class="stat-label">{{ _("analytics.today") }}</h3>
+          <ul class="stat-row">
+            <li class="stat"><strong>{{ performance.today.views }}</strong><span>{{ _("analytics.views") }}</span></li>
+            <li class="stat"><strong>{{ performance.today.uniques }}</strong><span>{{ _("analytics.uniques") }}</span></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="stat-label">{{ _("analytics.days7") }}</h3>
+          <ul class="stat-row">
+            <li class="stat"><strong>{{ performance.week.views }}</strong><span>{{ _("analytics.views") }}</span></li>
+            <li class="stat"><strong>{{ performance.week.uniques }}</strong><span>{{ _("analytics.uniques") }}</span></li>
+          </ul>
+        </div>
+      </div>
+      <h3 class="stat-label">{{ _("analytics.top") }}</h3>
+      {% if performance.top %}
+        <ul class="metric-list">
+          {% for item in performance.top %}
+            <li>
+              <a href="/admin/stories/{{ item.localization_id }}" dir="auto">{{ item.title }}</a>
+              <span>{{ item.views }} {{ _("analytics.views") }} · {{ item.uniques }} {{ _("analytics.uniques") }} · {{ item.comments }} {{ _("analytics.comments") }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="lede mt-2">{{ _("analytics.top_empty") }}</p>
+      {% endif %}
+    {% endif %}
+  </section>
+  {% endif %}
   <section class="panel">
     <h2>{{ _("admin.dashboard.areas") }}</h2>
     <p class="lede">{{ _("admin.dashboard.areas_help") }}</p>

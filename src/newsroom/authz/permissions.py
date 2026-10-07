@@ -30,6 +30,7 @@ class Perm(StrEnum):
     AUDIT_READ = "audit.read"
     SETTINGS_MANAGE = "settings.manage"
     PAGE_MANAGE = "page.manage"
+    ANALYTICS_READ = "analytics.read"
 
 
 PERMISSION_DESCRIPTIONS: dict[Perm, str] = {
@@ -61,6 +62,7 @@ PERMISSION_DESCRIPTIONS: dict[Perm, str] = {
     Perm.AUDIT_READ: "Read the audit log",
     Perm.SETTINGS_MANAGE: "Manage system settings",
     Perm.PAGE_MANAGE: "Create and publish site pages",
+    Perm.ANALYTICS_READ: "View public traffic for stories in scope",
 }
 
 
@@ -102,6 +104,7 @@ _EDITOR = (
         Perm.ARTICLE_CORRECT,
         Perm.TAG_MANAGE,
         Perm.MEDIA_MANAGE,
+        Perm.ANALYTICS_READ,
     }
 )
 _ADMIN = _EDITOR | {

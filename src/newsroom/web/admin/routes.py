@@ -2,9 +2,13 @@ import json
 from typing import Annotated
 from urllib.parse import urlsplit
 
+import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from newsroom.analytics.desk import DeskAnalytics
 from newsroom.articles.body import InvalidBody, render_body
 from newsroom.articles.workflow import TRANSITIONS, ArticleStatus
 from newsroom.auth.dependencies import (
@@ -17,6 +21,7 @@ from newsroom.auth.dependencies import (
 from newsroom.auth.schemas import Audience
 from newsroom.auth.service import AuthService, InvalidCredentials
 from newsroom.authz.dependencies import CurrentStaff
+from newsroom.authz.permissions import Perm
 from newsroom.core.db import DbSession
 from newsroom.core.i18n import UI_LOCALE_COOKIE, interface_locales
 from newsroom.web.templating import templates
@@ -175,8 +180,13 @@ async def workflow_page(request: Request, staff: CurrentStaff) -> HTMLResponse:
 async def dashboard(
     request: Request,
     staff: CurrentStaff,
+    db: DbSession,
     notice: str | None = None,
 ) -> HTMLResponse:
+    performance = None
+    analytics_down = False
+    if staff.grants.has_anywhere(Perm.ANALYTICS_READ):
+        performance, analytics_down = await _performance(request, db, staff)
     return templates.TemplateResponse(
         request,
         "admin/dashboard.html",
@@ -186,5 +196,21 @@ async def dashboard(
             "permissions": sorted(staff.grants.all_permissions()),
             "notice": notice,
             "detail": request.query_params.get("detail"),
+            "performance": performance,
+            "analytics_down": analytics_down,
         },
     )
+
+
+async def _performance(request: Request, db: DbSession, staff: CurrentStaff):
+    maker: async_sessionmaker[AsyncSession] | None = getattr(
+        request.app.state, "analytics_sessionmaker", None
+    )
+    if maker is None:
+        return None, True
+    try:
+        async with maker() as analytics:
+            return await DeskAnalytics(db, analytics).overview(staff), False
+    except SQLAlchemyError:
+        structlog.get_logger("newsroom.analytics").exception("analytics_overview_failed")
+        return None, True

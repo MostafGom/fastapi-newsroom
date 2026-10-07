@@ -55,6 +55,10 @@ ignore = ["B008", "RUF012", "N818"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
 "migrations/**" = ["N999"]
+"migrations_analytics/**" = ["N999"]
+# Rollup SQL is chosen from an allowlist in this module. Values are bound parameters.
+"src/newsroom/analytics/repository.py" = ["S608"]
+"src/newsroom/analytics/partitions.py" = ["S608"]
 
 [tool.pyright]
 include = ["src", "tests"]
