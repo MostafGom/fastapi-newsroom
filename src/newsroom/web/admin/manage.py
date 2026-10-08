@@ -124,18 +124,21 @@ async def sections_page(
     request: Request,
     staff: CurrentStaff,
     db: DbSession,
+    q: Annotated[str, Query(max_length=200)] = "",
     notice: str | None = None,
     detail: str | None = None,
 ) -> HTMLResponse:
     _require(staff, Perm.SECTION_MANAGE)
-    rows = await TaxonomyService(db).list_admin_sections()
-    keys = {row.id: row.key for row in rows}
+    rows = await TaxonomyService(db).list_admin_sections(q)
+    catalog = rows if not q.strip() else await TaxonomyService(db).list_admin_sections()
+    keys = {row.id: row.key for row in catalog}
     return templates.TemplateResponse(
         request,
         "admin/sections.html",
         {
             "staff": staff,
             "sections": [_section_view(row, keys) for row in rows],
+            "query": q,
             "notice": notice,
             "detail": detail,
         },
@@ -208,6 +211,7 @@ async def tags_page(
     request: Request,
     staff: CurrentStaff,
     db: DbSession,
+    q: Annotated[str, Query(max_length=200)] = "",
     notice: str | None = None,
     detail: str | None = None,
     page: PageQuery = 1,
@@ -217,7 +221,7 @@ async def tags_page(
     fragment = is_fragment(request, cursor)
     found = await TaxonomyService(db).list_tags(
         listing_params(_PAGE, page, fragment, cursor),
-        q=None,
+        q=q,
     )
     tag_views: dict[uuid.UUID, int] | None = None
     if staff.grants.sections_with(Perm.ANALYTICS_READ) is None:
@@ -238,12 +242,13 @@ async def tags_page(
         {
             "staff": staff,
             "tags": tags,
+            "query": q,
             "notice": notice,
             "detail": detail,
             **pager_context(
                 path="/admin/tags",
                 page=page,
-                extra=None,
+                extra={"q": q},
                 next_cursor=found.next_cursor,
                 fragment=fragment,
                 prev_key="manage.previous",
@@ -483,17 +488,19 @@ async def authors_page(
     request: Request,
     staff: CurrentStaff,
     db: DbSession,
+    q: Annotated[str, Query(max_length=200)] = "",
     notice: str | None = None,
     detail: str | None = None,
 ) -> HTMLResponse:
     _require(staff, Perm.ARTICLE_CREATE)
-    authors = await AuthorService(db).list_bylines()
+    authors = await AuthorService(db).list_bylines(q)
     return templates.TemplateResponse(
         request,
         "admin/authors.html",
         {
             "staff": staff,
             "authors": authors,
+            "query": q,
             "kinds": [AuthorKind.CONTRIBUTOR, AuthorKind.AGENCY],
             "notice": notice,
             "detail": detail,

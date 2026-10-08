@@ -67,7 +67,7 @@ Phases 1–3 are implemented. [AGENTS.md](../AGENTS.md) is the working agreement
 | 2 | Staff auth and user management, sections and tags, articles, revisions, workflow, scheduler, public site, reader accounts. |
 | 3 | Search (own service; see [ADR 0009](adr/0009-search-service.md)), media pipeline, site pages, newsletters, comments. |
 
-Next work, not started: desk search that can see drafts. Public search stays published-only.
+Desk lists filter on their own key, and story search includes drafts. Public search stays published-only.
 
 ## Explicitly out of scope for v1 (revisit later)
 - Paywall and payment processing.

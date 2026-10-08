@@ -204,8 +204,10 @@ Cursor pagination covers reader search, section and tag lists, and the home page
 which lists published stories by date. On the desk it covers the story list, the media
 library, accounts, tags, and the audit log. Site pages are one list. The JSON API keeps
 the opaque cursor. HTML lists use `?page=2` and append the next page in place, with
-previous and next on that same page. Languages and roles stay one page. Desk search
-is not built. The public search index covers published stories only.
+previous and next on that same page. Languages and roles stay one page. Desk lists
+filter on their own key: stories by title or slug, including drafts; accounts by email;
+tags, sections, and bylines by key or name; media by filename. The public search index
+covers published stories only.
 
 Still deliberately out of this version: a comment moderation queue, a paywall, staff
 two-factor authentication, and a second search engine for typo tolerance.

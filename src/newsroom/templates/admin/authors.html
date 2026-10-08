@@ -4,6 +4,12 @@
 <h1 class="text-2xl font-bold">{{ _("manage.authors") }}</h1>
 <p class="lede">{{ _("guide.authors") }}</p>
 {% include "admin/partials/notice.html" %}
+<form class="form-row mb-4" method="get" action="/admin/authors">
+  <label class="field">{{ _("manage.filter.key_or_name") }}
+    <input name="q" value="{{ query }}" maxlength="200">
+  </label>
+  <button class="btn-line" type="submit">{{ _("manage.filter") }}</button>
+</form>
 <form class="form panel my-4" method="post" action="/admin/authors">
   <h2 class="font-bold">{{ _("manage.create_author") }}</h2>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -47,6 +53,6 @@
   </ul>
 </section>
 {% else %}
-  <p class="text-muted">{{ _("manage.no_authors") }}</p>
+  <p class="text-muted">{{ _("manage.no_match") if query else _("manage.no_authors") }}</p>
 {% endif %}
 {% endblock %}

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,10 +51,10 @@ class TaxonomyService:
             _replace_section_translations(section, payload.translations)
         return await self._save_section(section)
 
-    async def list_admin_sections(self) -> list[SectionAdminOut]:
-        rows = (
-            await self.db.scalars(select(Section).order_by(Section.sort_order, Section.key))
-        ).all()
+    async def list_admin_sections(self, q: str | None = None) -> list[SectionAdminOut]:
+        stmt = select(Section).order_by(Section.sort_order, Section.key)
+        stmt = _match(stmt, q, Section.key, Section.translations, SectionTranslation.name)
+        rows = (await self.db.scalars(stmt)).all()
         return [_section_admin(row) for row in rows]
 
     async def public_sections(self, locale: str) -> list[SectionOut]:
@@ -157,8 +157,7 @@ class TaxonomyService:
 
     async def list_tags(self, paging: PageParams, q: str | None) -> Page[TagAdminOut]:
         stmt = select(Tag).order_by(Tag.key)
-        if q:
-            stmt = stmt.where(Tag.key.contains(q.strip().lower()))
+        stmt = _match(stmt, q, Tag.key, Tag.translations, TagTranslation.name)
         if paging.cursor:
             stmt = stmt.where(Tag.key > paging.cursor)
         rows = list((await self.db.scalars(stmt.limit(paging.limit + 1))).all())
@@ -246,6 +245,20 @@ def _tag_admin(tag: Tag) -> TagAdminOut:
             for item in tag.translations
         ],
     )
+
+
+def _like(term: str) -> str:
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _match(stmt, q: str | None, key, translations, name):
+    term = (q or "").strip()
+    if not term:
+        return stmt
+    pattern = _like(term)
+    named = translations.any(name.ilike(pattern, escape="\\"))
+    return stmt.where(or_(key.ilike(pattern, escape="\\"), named))
 
 
 def tag_public(tag: Tag, locale: str) -> TagOut | None:

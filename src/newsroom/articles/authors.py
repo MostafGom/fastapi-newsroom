@@ -3,7 +3,7 @@
 import uuid
 
 from pydantic import Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,8 +39,16 @@ class AuthorService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def list_bylines(self) -> list[AuthorOut]:
-        rows = (await self.db.scalars(select(Author).order_by(Author.key))).all()
+    async def list_bylines(self, q: str | None = None) -> list[AuthorOut]:
+        stmt = select(Author).order_by(Author.key)
+        term = (q or "").strip()
+        if term:
+            pattern = _like(term)
+            named = Author.translations.any(
+                AuthorTranslation.display_name.ilike(pattern, escape="\\")
+            )
+            stmt = stmt.where(or_(Author.key.ilike(pattern, escape="\\"), named))
+        rows = (await self.db.scalars(stmt)).all()
         return [_out(row) for row in rows]
 
     async def create(self, actor: Principal, payload: AuthorCreate) -> AuthorOut:
@@ -103,6 +111,11 @@ class AuthorService:
         ):
             return
         raise PermissionDenied("Missing permission: article.create")
+
+
+def _like(term: str) -> str:
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 def _out(author: Author) -> AuthorOut:
