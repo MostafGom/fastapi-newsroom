@@ -193,6 +193,12 @@ class DeskAnalytics:
         return {item: found[item].views for item in tag_ids}
 
 
+def average_engaged_ms(engaged_ms_sum: int, engaged_views: int) -> int:
+    if engaged_views <= 0:
+        return 0
+    return engaged_ms_sum // engaged_views
+
+
 def format_duration(ms: int) -> str:
     total = max(ms, 0) // 1000
     minutes, seconds = divmod(total, 60)
@@ -210,7 +216,7 @@ def _headline(measure: Measure) -> Headline:
         views=measure.views,
         uniques=measure.unique_visitors,
         average_time=format_duration(
-            measure.engaged_ms_sum // measure.views if measure.views else 0
+            average_engaged_ms(measure.engaged_ms_sum, measure.engaged_views)
         ),
         scroll_pct=scroll_share(measure.scroll_75, measure.views),
         clicks=measure.clicks,
@@ -242,7 +248,7 @@ def _fill(by_day: dict[date, DayMeasure], days: int) -> list[DayRow]:
                 views=found.views,
                 uniques=found.unique_visitors,
                 average_time=format_duration(
-                    found.engaged_ms_sum // found.views if found.views else 0
+                    average_engaged_ms(found.engaged_ms_sum, found.engaged_views)
                 ),
                 scroll_pct=scroll_share(found.scroll_75, found.views),
                 clicks=found.clicks,

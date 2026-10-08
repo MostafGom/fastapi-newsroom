@@ -1,7 +1,7 @@
 import uuid
 
 from newsroom.analytics.classify import device_class, is_bot, referrer_class
-from newsroom.analytics.desk import format_duration, scroll_share
+from newsroom.analytics.desk import average_engaged_ms, format_duration, scroll_share
 from newsroom.analytics.ingest import RateGate
 from newsroom.analytics.tokens import PageClaims, issue_page_token, read_page_token
 
@@ -61,6 +61,11 @@ def test_rate_gate_drops_the_extra_event() -> None:
     assert gate.allow("visitor", now=11)
     assert not gate.allow("visitor", now=12)
     assert gate.allow("visitor", now=71)
+
+
+def test_average_time_ignores_visits_that_left() -> None:
+    assert average_engaged_ms(30_000, 2) == 15_000
+    assert average_engaged_ms(30_000, 0) == 0
 
 
 def test_duration_and_scroll_share() -> None:

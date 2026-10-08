@@ -87,10 +87,10 @@ def _views(hits: tuple[_Hit, ...], days: int) -> int:
 
 
 def _average(hits: tuple[_Hit, ...], days: int) -> str:
-    chosen = _window(hits, days)
-    if not chosen:
+    stayed = tuple(hit for hit in _window(hits, days) if hit.engaged_ms > 0)
+    if not stayed:
         return "0:00"
-    return format_duration(sum(hit.engaged_ms for hit in chosen) // len(chosen))
+    return format_duration(sum(hit.engaged_ms for hit in stayed) // len(stayed))
 
 
 def _share(hits: tuple[_Hit, ...], days: int) -> int:
