@@ -305,9 +305,11 @@ async def change_slug(
 
 
 @router.get("/sections", response_model=list[SectionAdminOut], tags=["taxonomy"])
-async def list_sections(staff: CurrentStaff, db: DbSession) -> list[SectionAdminOut]:
+async def list_sections(
+    staff: CurrentStaff, db: DbSession, q: Annotated[str | None, Query(max_length=200)] = None
+) -> list[SectionAdminOut]:
     del staff
-    return await TaxonomyService(db).list_admin_sections()
+    return await TaxonomyService(db).list_admin_sections(q)
 
 
 @router.post(
@@ -464,9 +466,11 @@ async def update_role(
 
 
 @router.get("/authors", response_model=list[AuthorOut], tags=["authors"])
-async def list_authors(staff: CurrentStaff, db: DbSession) -> list[AuthorOut]:
+async def list_authors(
+    staff: CurrentStaff, db: DbSession, q: Annotated[str | None, Query(max_length=200)] = None
+) -> list[AuthorOut]:
     del staff
-    return await AuthorService(db).list_bylines()
+    return await AuthorService(db).list_bylines(q)
 
 
 @router.post(

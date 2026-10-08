@@ -90,9 +90,7 @@ Settled behavior:
 
 ## What is not done
 
-Do this next, in this order, unless the user says otherwise.
-
-1. **Desk search.** Do not put stories, accounts, and the audit log in one box. Add a story search that includes drafts (the public index cannot do that), plus a text filter on each list that already has a natural key: email on accounts, key or name on tags, sections, and bylines, filename on media.
+Each desk list filters on its own key. Stories match title or slug, including drafts. Accounts match email. Tags, sections, and bylines match key or name. Media matches filename. Public search stays published-only.
 
 Still out of scope until the user asks: Meilisearch or typo-tolerant search, a comment moderation queue, a paywall, newsletter unsubscribe, staff 2FA, a dark theme.
 

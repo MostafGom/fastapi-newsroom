@@ -310,6 +310,8 @@
   "manage.action": "Action",
   "manage.entity": "Entity",
   "manage.filter": "Filter",
+  "manage.filter.key_or_name": "Key or name",
+  "manage.no_match": "Nothing matches.",
   "manage.all": "All",
   "manage.more": "More",
   "manage.previous": "Previous",

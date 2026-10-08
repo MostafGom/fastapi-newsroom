@@ -58,6 +58,33 @@ async def test_management_screens_follow_the_role(
     )
     assert created_tag.status_code == 200
     assert "Budget" in created_tag.text
+    by_name = await client.get("/admin/tags", params={"q": "موازنة"})
+    assert "budget-tag" in by_name.text
+    by_key = await client.get("/admin/tags", params={"q": "BUDGET-TAG"})
+    assert "budget-tag" in by_key.text
+    missed_tag = await client.get("/admin/tags", params={"q": "%"})
+    assert "budget-tag" not in missed_tag.text
+    assert "لا شيء يطابق." in missed_tag.text
+    authors = await client.get("/admin/authors")
+    created_author = await client.post(
+        "/admin/authors",
+        data={
+            "csrf_token": _csrf(authors.text),
+            "kind": "contributor",
+            "key": "wire-guest",
+            "name_en": "Wire Guest",
+            "slug_en": "wire-guest",
+            "name_ar": "ضيف الوكالة",
+            "slug_ar": "wire-guest-ar",
+        },
+        follow_redirects=True,
+    )
+    assert "wire-guest" in created_author.text
+    by_byline = await client.get("/admin/authors", params={"q": "ضيف"})
+    assert "wire-guest" in by_byline.text
+    missed_author = await client.get("/admin/authors", params={"q": "zzz-nomatch"})
+    assert "wire-guest" not in missed_author.text
+    assert "لا شيء يطابق." in missed_author.text
     assert (await client.get("/admin/users")).status_code == 403
     assert (await client.get("/admin/sections")).status_code == 403
 
@@ -98,6 +125,11 @@ async def test_management_screens_follow_the_role(
         follow_redirects=True,
     )
     assert "City desk" in updated.text
+    by_section = await client.get("/admin/sections", params={"q": "المدينة"})
+    assert "citydesk" in by_section.text
+    missed_section = await client.get("/admin/sections", params={"q": "zzz-nomatch"})
+    assert "citydesk" not in missed_section.text
+    assert "لا شيء يطابق." in missed_section.text
 
     users = await client.get("/admin/users")
     hired = await client.post(

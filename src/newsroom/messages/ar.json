@@ -310,6 +310,8 @@
   "manage.action": "الإجراء",
   "manage.entity": "الكيان",
   "manage.filter": "تصفية",
+  "manage.filter.key_or_name": "المفتاح أو الاسم",
+  "manage.no_match": "لا شيء يطابق.",
   "manage.all": "الكل",
   "manage.more": "المزيد",
   "manage.previous": "السابق",
