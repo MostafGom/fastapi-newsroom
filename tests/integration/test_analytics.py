@@ -206,7 +206,7 @@ async def test_beacon_rolls_up_and_the_desk_is_section_scoped(
         )
         story = await client.get(f"/admin/stories/{politics.id}/analytics")
         assert story.status_code == 200
-        assert "0:07" in story.text
+        assert "0:15" in story.text
         assert "50%" in story.text
         assert "Direct" in story.text
 
