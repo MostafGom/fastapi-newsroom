@@ -3,6 +3,10 @@
 {% if report is none %}
   <p role="status">{{ _("analytics.unavailable") }}</p>
 {% else %}
+  <h3 class="stat-label">{{ _("analytics.today") }}</h3>
+  {% with headline=report.today %}
+    {% include "admin/partials/analytics_headline.html" %}
+  {% endwith %}
   <h3 class="stat-label">{{ _("analytics.days7") }}</h3>
   {% with headline=report.week %}
     {% include "admin/partials/analytics_headline.html" %}
@@ -15,11 +19,31 @@
     <li class="stat"><strong>{{ report.comments }}</strong><span>{{ _("analytics.comments") }}</span></li>
     <li class="stat"><strong>{{ report.bookmarks }}</strong><span>{{ _("analytics.bookmarks") }}</span></li>
   </ul>
-  <h3 class="stat-label">{{ _("analytics.referrers") }}</h3>
+  <h3 class="stat-label">{{ _("analytics.referrers") }} · {{ _("analytics.days28") }}</h3>
   {% if report.referrers %}
     <ul class="metric-list">
       {% for item in report.referrers %}
         <li><span>{{ _("analytics.referrer." ~ item.key) }}</span><span>{{ item.views }}</span></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="lede">{{ _("analytics.none") }}</p>
+  {% endif %}
+  <h3 class="stat-label">{{ _("analytics.devices") }} · {{ _("analytics.days7") }}</h3>
+  {% if report.devices %}
+    <ul class="metric-list">
+      {% for item in report.devices %}
+        <li><span>{{ _("analytics.device." ~ item.key) }}</span><span>{{ item.views }}</span></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="lede">{{ _("analytics.none") }}</p>
+  {% endif %}
+  <h3 class="stat-label">{{ _("analytics.targets") }} · {{ _("analytics.days7") }}</h3>
+  {% if report.clicks %}
+    <ul class="metric-list">
+      {% for item in report.clicks %}
+        <li><span dir="ltr">{{ item.target }}</span><span>{{ item.clicks }}</span></li>
       {% endfor %}
     </ul>
   {% else %}

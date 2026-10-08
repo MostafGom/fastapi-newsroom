@@ -2,19 +2,16 @@
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import Annotated
 from urllib.parse import quote
 
-import structlog
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 
-from newsroom.analytics.desk import DeskAnalytics
 from newsroom.articles.authors import AuthorService
 from newsroom.articles.body import InvalidBody
 from newsroom.articles.schemas import (
@@ -40,13 +37,14 @@ from newsroom.auth.dependencies import csrf_protect_web
 from newsroom.authz.dependencies import CurrentStaff
 from newsroom.authz.permissions import Perm
 from newsroom.comments.service import CommentService
-from newsroom.core.db import AnalyticsSession, DbSession
+from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
 from newsroom.taxonomy.schemas import SectionAdminOut, TagAdminOut
 from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.models import User, UserKind
 from newsroom.users.service import UserService
+from newsroom.web.admin.rollups import load_desk
 from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import _request_locale, templates
 
@@ -71,6 +69,9 @@ class StoryRow:
     editor: str | None
     updated_at: datetime
     legal_hold: bool
+    section_id: uuid.UUID
+    views_7: int | None = None
+    uniques_7: int | None = None
 
 
 def _direction(locale: str) -> str:
@@ -409,18 +410,13 @@ async def story_analytics(
     localization_id: uuid.UUID,
     staff: CurrentStaff,
     db: DbSession,
-    analytics: AnalyticsSession,
 ) -> HTMLResponse:
     articles = ArticleService(db)
     story = await articles.get_localization(staff, localization_id)
     article = await articles.get_admin(staff, story.article_id)
     if not staff.grants.has(Perm.ANALYTICS_READ, section_id=article.section_id):
         raise PermissionDenied("You cannot view these analytics")
-    report = None
-    try:
-        report = await DeskAnalytics(db, analytics).story(story.id, article.id)
-    except SQLAlchemyError:
-        structlog.get_logger("newsroom.analytics").exception("analytics_story_failed")
+    report = await load_desk(request, db, lambda desk: desk.story(story.id, article.id))
     return templates.TemplateResponse(
         request,
         "admin/partials/story_analytics.html",
@@ -745,6 +741,7 @@ async def stories_page(
         author_names={item.id: item.display_name for item in authors},
         editor_names={item.id: item.display_name or item.email for item in staff_rows},
     )
+    stories = await _attach_visits(request, staff, db, stories)
     filters = {
         "status": status,
         "locale": locale,
@@ -779,6 +776,29 @@ async def stories_page(
             ),
         },
     )
+
+
+async def _attach_visits(
+    request: Request, staff: CurrentStaff, db: DbSession, rows: list[StoryRow]
+) -> list[StoryRow]:
+    allowed = [
+        row.localization_id
+        for row in rows
+        if staff.grants.has(Perm.ANALYTICS_READ, section_id=row.section_id)
+    ]
+    if not allowed:
+        return rows
+    found = await load_desk(request, db, lambda desk: desk.visits(allowed))
+    if found is None:
+        return rows
+    attached: list[StoryRow] = []
+    for row in rows:
+        measure = found.get(row.localization_id)
+        if measure is None:
+            attached.append(row)
+            continue
+        attached.append(replace(row, views_7=measure.views, uniques_7=measure.unique_visitors))
+    return attached
 
 
 async def story_rows(
@@ -829,6 +849,7 @@ async def story_rows(
                 editor=editor_names.get(item.reviewed_by) if item.reviewed_by else None,
                 updated_at=item.updated_at,
                 legal_hold=item.legal_hold,
+                section_id=article.section_id,
             )
             for item in article.localizations
         )

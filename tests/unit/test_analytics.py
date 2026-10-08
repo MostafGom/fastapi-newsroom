@@ -18,6 +18,16 @@ def _claims() -> PageClaims:
     )
 
 
+def test_page_token_round_trip_keeps_a_tag() -> None:
+    tag_id = uuid.uuid7()
+    claims = PageClaims(surface="tag", locale="en", tag_id=tag_id)
+    token = issue_page_token(SECRET, claims, ttl_seconds=60, now=1_000)
+    assert read_page_token(SECRET, token, now=1_030) == claims
+    search = PageClaims(surface="search", locale="ar")
+    search_token = issue_page_token(SECRET, search, ttl_seconds=60, now=1_000)
+    assert read_page_token(SECRET, search_token, now=1_030) == search
+
+
 def test_page_token_round_trip() -> None:
     claims = _claims()
     token = issue_page_token(SECRET, claims, ttl_seconds=60, now=1_000)

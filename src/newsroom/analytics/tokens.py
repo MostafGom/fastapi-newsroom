@@ -21,6 +21,7 @@ class PageClaims:
     article_id: uuid.UUID | None = None
     section_id: uuid.UUID | None = None
     page_id: uuid.UUID | None = None
+    tag_id: uuid.UUID | None = None
 
 
 def issue_page_token(
@@ -37,6 +38,7 @@ def issue_page_token(
         "pg": _s(claims.page_id),
         "sec": _s(claims.section_id),
         "sur": claims.surface,
+        "tag": _s(claims.tag_id),
     }
     body = _encode(payload)
     return f"{body}.{_sign(secret, body)}"
@@ -72,6 +74,7 @@ def read_page_token(secret: str, token: str, *, now: int | None = None) -> PageC
             article_id=_uuid(payload.get("art")),
             section_id=_uuid(payload.get("sec")),
             page_id=_uuid(payload.get("pg")),
+            tag_id=_uuid(payload.get("tag")),
         )
     except ValueError:
         return None

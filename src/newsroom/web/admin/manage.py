@@ -18,7 +18,7 @@ from newsroom.authz.dependencies import CurrentStaff
 from newsroom.authz.permissions import Perm
 from newsroom.core.config import get_settings
 from newsroom.core.db import DbSession
-from newsroom.core.errors import AppError, PermissionDenied
+from newsroom.core.errors import AppError, NotFound, PermissionDenied
 from newsroom.core.i18n import TextDirection
 from newsroom.locales.service import LocaleCreate, LocaleService
 from newsroom.settings.service import SettingsService, SiteSettingsUpdate
@@ -34,6 +34,7 @@ from newsroom.taxonomy.service import TaxonomyService
 from newsroom.users.models import UserKind, UserStatus
 from newsroom.users.schemas import RoleCreate, RoleGrantCreate, StaffCreate, UserUpdate
 from newsroom.users.service import UserService
+from newsroom.web.admin.rollups import load_desk
 from newsroom.web.paging import PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
 
@@ -181,6 +182,27 @@ async def update_section(
     return RedirectResponse("/admin/sections?notice=saved", status_code=303)
 
 
+@router.get("/sections/{section_id}/analytics", response_class=HTMLResponse)
+async def section_analytics(
+    request: Request, section_id: uuid.UUID, staff: CurrentStaff, db: DbSession
+) -> HTMLResponse:
+    if not staff.grants.has(Perm.ANALYTICS_READ, section_id=section_id):
+        raise PermissionDenied("You cannot view these analytics")
+    rows = await TaxonomyService(db).list_admin_sections()
+    if not any(row.id == section_id for row in rows):
+        raise NotFound("Section not found")
+    report = await load_desk(request, db, lambda desk: desk.section(section_id))
+    return templates.TemplateResponse(
+        request,
+        "admin/partials/window_analytics.html",
+        {
+            "heading": "analytics.section_page",
+            "lede": "analytics.section_lede",
+            "report": report,
+        },
+    )
+
+
 @router.get("/tags", response_class=HTMLResponse)
 async def tags_page(
     request: Request,
@@ -197,8 +219,18 @@ async def tags_page(
         listing_params(_PAGE, page, fragment, cursor),
         q=None,
     )
+    tag_views: dict[uuid.UUID, int] | None = None
+    if staff.grants.sections_with(Perm.ANALYTICS_READ) is None:
+        tag_ids = [tag.id for tag in found.items]
+        tag_views = await load_desk(request, db, lambda desk: desk.tags(tag_ids))
     tags = [
-        {"id": tag.id, "key": tag.key, "locales": _filled(tag.translations)} for tag in found.items
+        {
+            "id": tag.id,
+            "key": tag.key,
+            "locales": _filled(tag.translations),
+            "views_7": None if tag_views is None else tag_views.get(tag.id, 0),
+        }
+        for tag in found.items
     ]
     return templates.TemplateResponse(
         request,

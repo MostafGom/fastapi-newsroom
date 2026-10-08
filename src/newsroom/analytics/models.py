@@ -18,7 +18,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from newsroom.core.models import NAMING_CONVENTION
 
-SURFACES = ("article", "page", "home", "section", "tag")
+SURFACES = ("article", "page", "home", "section", "tag", "search")
+OTHER_SURFACES = ("home", "section", "tag", "page", "search")
 EVENT_TYPES = ("page_view", "engagement", "click")
 REFERRER_CLASSES = ("direct", "search", "social", "internal", "other")
 DEVICE_CLASSES = ("desktop", "mobile", "tablet", "other")
@@ -33,7 +34,9 @@ class AnalyticsEvent(AnalyticsBase):
     __tablename__ = "events"
     __table_args__ = (
         CheckConstraint("type IN ('page_view', 'engagement', 'click')", name="type"),
-        CheckConstraint("surface IN ('article', 'page', 'home', 'section', 'tag')", name="surface"),
+        CheckConstraint(
+            "surface IN ('article', 'page', 'home', 'section', 'tag', 'search')", name="surface"
+        ),
         CheckConstraint(
             "referrer_class IN ('direct', 'search', 'social', 'internal', 'other')",
             name="referrer_class",
@@ -55,6 +58,7 @@ class AnalyticsEvent(AnalyticsBase):
     article_id: Mapped[uuid.UUID | None]
     section_id: Mapped[uuid.UUID | None]
     page_id: Mapped[uuid.UUID | None]
+    tag_id: Mapped[uuid.UUID | None]
     locale: Mapped[str] = mapped_column(String(10))
     surface: Mapped[str] = mapped_column(String(16))
     visitor_id: Mapped[uuid.UUID]
@@ -130,10 +134,34 @@ class SiteStatsDaily(_Measure, AnalyticsBase):
     surface: Mapped[str] = mapped_column(String(16), primary_key=True)
 
 
+class ArticleDeviceDaily(AnalyticsBase):
+    __tablename__ = "stats_article_device_daily"
+    __table_args__ = (
+        CheckConstraint(
+            "device_class IN ('desktop', 'mobile', 'tablet', 'other')", name="device_class"
+        ),
+    )
+
+    localization_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    bucket: Mapped[datetime] = mapped_column(primary_key=True)
+    device_class: Mapped[str] = mapped_column(String(16), primary_key=True)
+    views: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+
+
+class ArticleClickDaily(AnalyticsBase):
+    __tablename__ = "stats_article_click_daily"
+
+    localization_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    bucket: Mapped[datetime] = mapped_column(primary_key=True)
+    click_target: Mapped[str] = mapped_column(String(200), primary_key=True)
+    clicks: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+
+
 class SiteStatsWindow(_Measure, AnalyticsBase):
     __tablename__ = "stats_site_window"
 
     window_days: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    surface: Mapped[str] = mapped_column(String(16), primary_key=True)
 
 
 class SectionStatsHourly(_Measure, AnalyticsBase):
@@ -155,3 +183,31 @@ class SectionStatsWindow(_Measure, AnalyticsBase):
 
     section_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     window_days: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+
+
+class SectionListingWindow(_Measure, AnalyticsBase):
+    """Visits to a section's public list. Article reads stay on the article rollups."""
+
+    __tablename__ = "stats_section_listing_window"
+
+    section_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    window_days: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+
+
+class PageStatsWindow(_Measure, AnalyticsBase):
+    __tablename__ = "stats_page_window"
+
+    page_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    window_days: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+
+
+class TagStatsWindow(_Measure, AnalyticsBase):
+    __tablename__ = "stats_tag_window"
+
+    tag_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    window_days: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+
+
+def truncate_statement() -> str:
+    names = ", ".join(table.name for table in AnalyticsBase.metadata.sorted_tables)
+    return f"TRUNCATE {names}"
