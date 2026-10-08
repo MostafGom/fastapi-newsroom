@@ -74,6 +74,7 @@ def _track(
     article_id: uuid.UUID | None = None,
     section_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
+    tag_id: uuid.UUID | None = None,
 ) -> str:
     settings = get_settings()
     return issue_page_token(
@@ -85,6 +86,7 @@ def _track(
             article_id=article_id,
             section_id=section_id,
             page_id=page_id,
+            tag_id=tag_id,
         ),
         ttl_seconds=settings.analytics_token_ttl_seconds,
     )
@@ -160,6 +162,7 @@ async def search(
             "reader": reader,
             "hits": found.items,
             "query": q,
+            "track_token": None if fragment else _track(locale, "search"),
             **pager_context(
                 path=f"/{locale}/search",
                 page=page,
@@ -247,7 +250,7 @@ async def tag(
             "articles": found.items,
             "heading": found_tag.name,
             "empty_key": "tag.empty",
-            "track_token": None if fragment else _track(locale, "tag"),
+            "track_token": None if fragment else _track(locale, "tag", tag_id=found_tag.id),
             **pager_context(
                 path=f"/{locale}/tag/{slug}",
                 page=page,

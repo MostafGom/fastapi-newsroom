@@ -2,7 +2,7 @@
   {% for row in days %}
     <li>
       <span>{{ format_date(row.bucket, locale) }}</span>
-      <span>{{ row.views }} {{ _("analytics.views") }} · {{ row.uniques }} {{ _("analytics.uniques") }} · {{ row.average_time }}</span>
+      <span>{{ row.views }} {{ _("analytics.views") }} · {{ row.uniques }} {{ _("analytics.uniques") }} · {{ row.average_time }} · {{ row.scroll_pct }}% · {{ row.clicks }} {{ _("analytics.clicks") }}</span>
     </li>
   {% endfor %}
 </ul>

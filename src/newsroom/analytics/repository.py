@@ -9,12 +9,17 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from newsroom.analytics.models import (
+    ArticleClickDaily,
+    ArticleDeviceDaily,
     ArticleReferrerDaily,
     ArticleStatsDaily,
     ArticleStatsHourly,
     ArticleStatsWindow,
+    PageStatsWindow,
+    SectionListingWindow,
     SectionStatsWindow,
     SiteStatsWindow,
+    TagStatsWindow,
 )
 
 _MEASURES = """
@@ -73,6 +78,25 @@ class ReferrerMeasure:
     views: int
 
 
+@dataclass(frozen=True, slots=True)
+class DeviceMeasure:
+    device_class: str
+    views: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClickMeasure:
+    target: str
+    clicks: int
+
+
+@dataclass(frozen=True, slots=True)
+class SurfaceMeasure:
+    surface: str
+    views: int
+    unique_visitors: int
+
+
 class AnalyticsRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -93,7 +117,7 @@ class AnalyticsRepository:
                 f"{_MEASURES} "
                 "FROM events WHERE occurred_at >= :start AND occurred_at < :end "
                 "AND localization_id IS NOT NULL AND article_id IS NOT NULL "
-                "AND section_id IS NOT NULL "
+                "AND section_id IS NOT NULL AND surface = 'article' "
                 "GROUP BY localization_id"
             ),
             {"start": start, "end": end, "bucket": bucket},
@@ -119,18 +143,6 @@ class AnalyticsRepository:
             ),
             {"start": start, "end": end, "bucket": bucket},
         )
-        await self.db.execute(
-            text(
-                f"INSERT INTO {table} ("
-                "bucket, surface, views, unique_visitors, engaged_ms_sum, engaged_views, "
-                "scroll_75, clicks) "
-                "SELECT :bucket, 'all', "
-                f"{_MEASURES} "
-                "FROM events WHERE occurred_at >= :start AND occurred_at < :end "
-                "HAVING COUNT(*) > 0"
-            ),
-            {"start": start, "end": end, "bucket": bucket},
-        )
 
     async def replace_section_bucket(
         self, table: str, start: datetime, end: datetime, bucket: datetime
@@ -148,7 +160,7 @@ class AnalyticsRepository:
                 "SELECT section_id, :bucket, "
                 f"{_MEASURES} "
                 "FROM events WHERE occurred_at >= :start AND occurred_at < :end "
-                "AND section_id IS NOT NULL "
+                "AND section_id IS NOT NULL AND surface = 'article' "
                 "GROUP BY section_id"
             ),
             {"start": start, "end": end, "bucket": bucket},
@@ -170,6 +182,35 @@ class AnalyticsRepository:
             {"start": start, "end": end, "bucket": bucket},
         )
 
+    async def replace_devices(self, start: datetime, end: datetime, bucket: datetime) -> None:
+        await self.db.execute(delete(ArticleDeviceDaily).where(ArticleDeviceDaily.bucket == bucket))
+        await self.db.execute(
+            text(
+                "INSERT INTO stats_article_device_daily "
+                "(localization_id, bucket, device_class, views) "
+                "SELECT localization_id, :bucket, device_class, COUNT(*) "
+                "FROM events WHERE type = 'page_view' AND localization_id IS NOT NULL "
+                "AND surface = 'article' AND occurred_at >= :start AND occurred_at < :end "
+                "GROUP BY localization_id, device_class"
+            ),
+            {"start": start, "end": end, "bucket": bucket},
+        )
+
+    async def replace_clicks(self, start: datetime, end: datetime, bucket: datetime) -> None:
+        await self.db.execute(delete(ArticleClickDaily).where(ArticleClickDaily.bucket == bucket))
+        await self.db.execute(
+            text(
+                "INSERT INTO stats_article_click_daily "
+                "(localization_id, bucket, click_target, clicks) "
+                "SELECT localization_id, :bucket, click_target, COUNT(*) "
+                "FROM events WHERE type = 'click' AND localization_id IS NOT NULL "
+                "AND click_target IS NOT NULL AND click_target <> '' "
+                "AND occurred_at >= :start AND occurred_at < :end "
+                "GROUP BY localization_id, click_target"
+            ),
+            {"start": start, "end": end, "bucket": bucket},
+        )
+
     async def replace_windows(self, days: int, start: datetime) -> None:
         await self.db.execute(
             delete(ArticleStatsWindow).where(ArticleStatsWindow.window_days == days)
@@ -178,6 +219,11 @@ class AnalyticsRepository:
         await self.db.execute(
             delete(SectionStatsWindow).where(SectionStatsWindow.window_days == days)
         )
+        await self.db.execute(
+            delete(SectionListingWindow).where(SectionListingWindow.window_days == days)
+        )
+        await self.db.execute(delete(PageStatsWindow).where(PageStatsWindow.window_days == days))
+        await self.db.execute(delete(TagStatsWindow).where(TagStatsWindow.window_days == days))
         params = {"days": days, "start": start}
         await self.db.execute(
             text(
@@ -189,7 +235,7 @@ class AnalyticsRepository:
                 f"{_MEASURES} "
                 "FROM events WHERE occurred_at >= :start "
                 "AND localization_id IS NOT NULL AND article_id IS NOT NULL "
-                "AND section_id IS NOT NULL "
+                "AND section_id IS NOT NULL AND surface = 'article' "
                 "GROUP BY localization_id"
             ),
             params,
@@ -197,12 +243,12 @@ class AnalyticsRepository:
         await self.db.execute(
             text(
                 "INSERT INTO stats_site_window ("
-                "window_days, views, unique_visitors, engaged_ms_sum, engaged_views, "
+                "window_days, surface, views, unique_visitors, engaged_ms_sum, engaged_views, "
                 "scroll_75, clicks) "
-                "SELECT :days, "
+                "SELECT :days, surface, "
                 f"{_MEASURES} "
                 "FROM events WHERE occurred_at >= :start "
-                "HAVING COUNT(*) > 0"
+                "GROUP BY surface"
             ),
             params,
         )
@@ -214,14 +260,68 @@ class AnalyticsRepository:
                 "SELECT section_id, :days, "
                 f"{_MEASURES} "
                 "FROM events WHERE occurred_at >= :start AND section_id IS NOT NULL "
+                "AND surface = 'article' "
                 "GROUP BY section_id"
+            ),
+            params,
+        )
+        await self.db.execute(
+            text(
+                "INSERT INTO stats_section_listing_window ("
+                "section_id, window_days, views, unique_visitors, engaged_ms_sum, "
+                "engaged_views, scroll_75, clicks) "
+                "SELECT section_id, :days, "
+                f"{_MEASURES} "
+                "FROM events WHERE occurred_at >= :start AND surface = 'section' "
+                "AND section_id IS NOT NULL "
+                "GROUP BY section_id"
+            ),
+            params,
+        )
+        await self.db.execute(
+            text(
+                "INSERT INTO stats_page_window ("
+                "page_id, window_days, views, unique_visitors, engaged_ms_sum, "
+                "engaged_views, scroll_75, clicks) "
+                "SELECT page_id, :days, "
+                f"{_MEASURES} "
+                "FROM events WHERE occurred_at >= :start AND surface = 'page' "
+                "AND page_id IS NOT NULL "
+                "GROUP BY page_id"
+            ),
+            params,
+        )
+        await self.db.execute(
+            text(
+                "INSERT INTO stats_tag_window ("
+                "tag_id, window_days, views, unique_visitors, engaged_ms_sum, "
+                "engaged_views, scroll_75, clicks) "
+                "SELECT tag_id, :days, "
+                f"{_MEASURES} "
+                "FROM events WHERE occurred_at >= :start AND surface = 'tag' "
+                "AND tag_id IS NOT NULL "
+                "GROUP BY tag_id"
             ),
             params,
         )
 
     async def site_window(self, days: int) -> Measure:
-        row = await self.db.get(SiteStatsWindow, days)
+        row = await self.db.get(SiteStatsWindow, (days, "article"))
         return _measure(row) if row is not None else Measure()
+
+    async def site_surfaces(self, days: int) -> list[SurfaceMeasure]:
+        rows = (
+            await self.db.scalars(
+                select(SiteStatsWindow).where(SiteStatsWindow.window_days == days)
+            )
+        ).all()
+        return [
+            SurfaceMeasure(
+                surface=row.surface, views=row.views, unique_visitors=row.unique_visitors
+            )
+            for row in rows
+            if row.surface != "article"
+        ]
 
     async def section_window(self, days: int, section_ids: frozenset[uuid.UUID]) -> Measure:
         if not section_ids:
@@ -255,6 +355,42 @@ class AnalyticsRepository:
     async def article_window(self, localization_id: uuid.UUID, days: int) -> Measure:
         row = await self.db.get(ArticleStatsWindow, (localization_id, days))
         return _measure(row) if row is not None else Measure()
+
+    async def article_windows(
+        self, localization_ids: list[uuid.UUID], days: int
+    ) -> dict[uuid.UUID, Measure]:
+        if not localization_ids:
+            return {}
+        rows = (
+            await self.db.scalars(
+                select(ArticleStatsWindow).where(
+                    ArticleStatsWindow.window_days == days,
+                    ArticleStatsWindow.localization_id.in_(localization_ids),
+                )
+            )
+        ).all()
+        return {row.localization_id: _measure(row) for row in rows}
+
+    async def section_listing(self, section_id: uuid.UUID, days: int) -> Measure:
+        row = await self.db.get(SectionListingWindow, (section_id, days))
+        return _measure(row) if row is not None else Measure()
+
+    async def page_window(self, page_id: uuid.UUID, days: int) -> Measure:
+        row = await self.db.get(PageStatsWindow, (page_id, days))
+        return _measure(row) if row is not None else Measure()
+
+    async def tag_windows(self, tag_ids: list[uuid.UUID], days: int) -> dict[uuid.UUID, Measure]:
+        if not tag_ids:
+            return {}
+        rows = (
+            await self.db.scalars(
+                select(TagStatsWindow).where(
+                    TagStatsWindow.window_days == days,
+                    TagStatsWindow.tag_id.in_(tag_ids),
+                )
+            )
+        ).all()
+        return {row.tag_id: _measure(row) for row in rows}
 
     async def article_days(self, localization_id: uuid.UUID, start: datetime) -> list[DayMeasure]:
         rows = (
@@ -295,13 +431,52 @@ class AnalyticsRepository:
         ranked = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
         return [ReferrerMeasure(referrer_class=key, views=views) for key, views in ranked if views]
 
+    async def devices(self, localization_id: uuid.UUID, start: datetime) -> list[DeviceMeasure]:
+        rows = (
+            await self.db.execute(
+                select(ArticleDeviceDaily.device_class, ArticleDeviceDaily.views).where(
+                    ArticleDeviceDaily.localization_id == localization_id,
+                    ArticleDeviceDaily.bucket >= start,
+                )
+            )
+        ).all()
+        totals: dict[str, int] = {}
+        for device_class, views in rows:
+            totals[device_class] = totals.get(device_class, 0) + int(views)
+        ranked = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+        return [DeviceMeasure(device_class=key, views=views) for key, views in ranked if views]
+
+    async def clicks(
+        self, localization_id: uuid.UUID, start: datetime, *, limit: int = 8
+    ) -> list[ClickMeasure]:
+        rows = (
+            await self.db.execute(
+                select(ArticleClickDaily.click_target, ArticleClickDaily.clicks).where(
+                    ArticleClickDaily.localization_id == localization_id,
+                    ArticleClickDaily.bucket >= start,
+                )
+            )
+        ).all()
+        totals: dict[str, int] = {}
+        for target, clicks in rows:
+            totals[target] = totals.get(target, 0) + int(clicks)
+        ranked = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+        return [ClickMeasure(target=key, clicks=clicks) for key, clicks in ranked[:limit] if clicks]
+
 
 def _check(table: str, allowed: frozenset[str]) -> None:
     if table not in allowed:
         raise ValueError("unknown rollup table")
 
 
-def _measure(row: SiteStatsWindow | ArticleStatsWindow | SectionStatsWindow) -> Measure:
+def _measure(
+    row: SiteStatsWindow
+    | ArticleStatsWindow
+    | SectionStatsWindow
+    | SectionListingWindow
+    | PageStatsWindow
+    | TagStatsWindow,
+) -> Measure:
     return Measure(
         views=row.views,
         unique_visitors=row.unique_visitors,

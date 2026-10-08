@@ -2,13 +2,9 @@ import json
 from typing import Annotated
 from urllib.parse import urlsplit
 
-import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from newsroom.analytics.desk import DeskAnalytics
 from newsroom.articles.body import InvalidBody, render_body
 from newsroom.articles.workflow import TRANSITIONS, ArticleStatus
 from newsroom.auth.dependencies import (
@@ -24,7 +20,8 @@ from newsroom.authz.dependencies import CurrentStaff
 from newsroom.authz.permissions import Perm
 from newsroom.core.db import DbSession
 from newsroom.core.i18n import UI_LOCALE_COOKIE, interface_locales
-from newsroom.web.templating import templates
+from newsroom.web.admin.rollups import load_desk
+from newsroom.web.templating import _request_locale, templates
 
 router = APIRouter(
     prefix="/admin", dependencies=[Depends(csrf_protect_web)], include_in_schema=False
@@ -203,14 +200,6 @@ async def dashboard(
 
 
 async def _performance(request: Request, db: DbSession, staff: CurrentStaff):
-    maker: async_sessionmaker[AsyncSession] | None = getattr(
-        request.app.state, "analytics_sessionmaker", None
-    )
-    if maker is None:
-        return None, True
-    try:
-        async with maker() as analytics:
-            return await DeskAnalytics(db, analytics).overview(staff), False
-    except SQLAlchemyError:
-        structlog.get_logger("newsroom.analytics").exception("analytics_overview_failed")
-        return None, True
+    locale = _request_locale(request)
+    report = await load_desk(request, db, lambda desk: desk.overview(staff, locale))
+    return report, report is None

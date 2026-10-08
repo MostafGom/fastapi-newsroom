@@ -14,6 +14,7 @@ from newsroom.articles.models import ArticleLocalization, ArticleRevision, Bookm
 from newsroom.auth.principal import Principal
 from newsroom.authz.permissions import Perm
 from newsroom.comments.models import Comment
+from newsroom.taxonomy.models import Section, SectionTranslation
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,12 +32,39 @@ class DayRow:
     views: int
     uniques: int
     average_time: str
+    scroll_pct: int
+    clicks: int
 
 
 @dataclass(frozen=True, slots=True)
 class ReferrerRow:
     key: str
     views: int
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceRow:
+    key: str
+    views: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClickRow:
+    target: str
+    clicks: int
+
+
+@dataclass(frozen=True, slots=True)
+class SurfaceRow:
+    key: str
+    views: int
+
+
+@dataclass(frozen=True, slots=True)
+class SectionListing:
+    section_id: uuid.UUID
+    name: str
+    week: Headline
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,15 +81,26 @@ class Overview:
     today: Headline
     week: Headline
     top: list[TopStory]
+    surfaces: list[SurfaceRow]
+    listings: list[SectionListing]
+
+
+@dataclass(frozen=True, slots=True)
+class WindowReport:
+    week: Headline
+    month: Headline
 
 
 @dataclass(frozen=True, slots=True)
 class StoryReport:
+    today: Headline
     week: Headline
     month: Headline
     days_7: list[DayRow]
     days_28: list[DayRow]
     referrers: list[ReferrerRow]
+    devices: list[DeviceRow]
+    clicks: list[ClickRow]
     comments: int
     bookmarks: int
 
@@ -71,7 +110,7 @@ class DeskAnalytics:
         self.editorial = editorial
         self.analytics = AnalyticsService(analytics)
 
-    async def overview(self, staff: Principal) -> Overview:
+    async def overview(self, staff: Principal, locale: str) -> Overview:
         sections = staff.grants.sections_with(Perm.ANALYTICS_READ)
         today = await self.analytics.totals(1, sections)
         week = await self.analytics.totals(7, sections)
@@ -93,20 +132,65 @@ class DeskAnalytics:
             for row in ranked
             if row.localization_id in titles
         ]
-        return Overview(today=_headline(today), week=_headline(week), top=top)
+        surfaces: list[SurfaceRow] = []
+        listings: list[SectionListing] = []
+        if sections is None:
+            surfaces = [
+                SurfaceRow(key=row.surface, views=row.views)
+                for row in await self.analytics.surfaces(7)
+            ]
+        else:
+            names = await _section_names(self.editorial, list(sections), locale)
+            listings = [
+                SectionListing(
+                    section_id=section_id,
+                    name=names.get(section_id, ""),
+                    week=_headline(await self.analytics.listing(section_id, 7)),
+                )
+                for section_id in sorted(sections, key=lambda item: names.get(item, ""))
+            ]
+        return Overview(
+            today=_headline(today),
+            week=_headline(week),
+            top=top,
+            surfaces=surfaces,
+            listings=listings,
+        )
 
     async def story(self, localization_id: uuid.UUID, article_id: uuid.UUID) -> StoryReport:
-        week, month, days, referrers = await self.analytics.story(localization_id)
+        today, week, month, days, referrers, devices, clicks = await self.analytics.story(
+            localization_id
+        )
         by_day = {row.bucket.date(): row for row in days}
         return StoryReport(
+            today=_headline(today),
             week=_headline(week),
             month=_headline(month),
             days_7=_fill(by_day, 7),
             days_28=_fill(by_day, 28),
             referrers=[ReferrerRow(key=row.referrer_class, views=row.views) for row in referrers],
+            devices=[DeviceRow(key=row.device_class, views=row.views) for row in devices],
+            clicks=[ClickRow(target=row.target, clicks=row.clicks) for row in clicks],
             comments=await _comment_total(self.editorial, localization_id),
             bookmarks=await _bookmark_total(self.editorial, article_id),
         )
+
+    async def visits(self, localization_ids: list[uuid.UUID]) -> dict[uuid.UUID, Measure]:
+        return await self.analytics.visits(localization_ids)
+
+    async def section(self, section_id: uuid.UUID) -> WindowReport:
+        week = await self.analytics.listing(section_id, 7)
+        month = await self.analytics.listing(section_id, 28)
+        return WindowReport(week=_headline(week), month=_headline(month))
+
+    async def page(self, page_id: uuid.UUID) -> WindowReport:
+        week = await self.analytics.page(page_id, 7)
+        month = await self.analytics.page(page_id, 28)
+        return WindowReport(week=_headline(week), month=_headline(month))
+
+    async def tags(self, tag_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        found = await self.analytics.tags(tag_ids)
+        return {item: found[item].views for item in tag_ids}
 
 
 def format_duration(ms: int) -> str:
@@ -141,7 +225,16 @@ def _fill(by_day: dict[date, DayMeasure], days: int) -> list[DayRow]:
         day = start + timedelta(days=offset)
         found = by_day.get(day)
         if found is None:
-            rows.append(DayRow(bucket=_midnight(day), views=0, uniques=0, average_time="0:00"))
+            rows.append(
+                DayRow(
+                    bucket=_midnight(day),
+                    views=0,
+                    uniques=0,
+                    average_time="0:00",
+                    scroll_pct=0,
+                    clicks=0,
+                )
+            )
             continue
         rows.append(
             DayRow(
@@ -151,6 +244,8 @@ def _fill(by_day: dict[date, DayMeasure], days: int) -> list[DayRow]:
                 average_time=format_duration(
                     found.engaged_ms_sum // found.views if found.views else 0
                 ),
+                scroll_pct=scroll_share(found.scroll_75, found.views),
+                clicks=found.clicks,
             )
         )
     return rows
@@ -158,6 +253,25 @@ def _fill(by_day: dict[date, DayMeasure], days: int) -> list[DayRow]:
 
 def _midnight(day: date) -> datetime:
     return datetime.combine(day, datetime.min.time(), tzinfo=UTC)
+
+
+async def _section_names(
+    db: AsyncSession, ids: list[uuid.UUID], locale: str
+) -> dict[uuid.UUID, str]:
+    if not ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(Section.id, Section.key, SectionTranslation.name)
+            .outerjoin(
+                SectionTranslation,
+                (SectionTranslation.section_id == Section.id)
+                & (SectionTranslation.locale == locale),
+            )
+            .where(Section.id.in_(ids))
+        )
+    ).all()
+    return {section_id: name or key for section_id, key, name in rows}
 
 
 async def _titles(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:

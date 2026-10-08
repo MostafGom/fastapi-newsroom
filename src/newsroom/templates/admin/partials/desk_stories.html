@@ -10,6 +10,9 @@
     {% endif %}
     {% if story.editor %}<li>{{ story.editor }}</li>{% endif %}
     <li><time datetime="{{ story.updated_at.isoformat() }}">{{ format_date(story.updated_at, locale) }}</time></li>
+    {% if story.views_7 is not none %}
+      <li>{{ story.views_7 }} {{ _("analytics.views") }} · {{ story.uniques_7 }} {{ _("analytics.uniques") }} · {{ _("analytics.days7") }}</li>
+    {% endif %}
     {% if story.legal_hold %}<li class="desk-hold">{{ _("desk.hold") }}</li>{% endif %}
   </ul>
 </li>

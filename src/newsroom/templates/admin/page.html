@@ -4,6 +4,12 @@
 <p class="mb-3"><a class="no-underline" href="/admin/pages">{{ _("pages.heading") }}</a></p>
 <h1 class="text-2xl font-bold" dir="ltr">{{ page.key }}</h1>
 <p class="lede mb-4">{{ _("guide.pages") }}</p>
+{% if can_view_analytics %}
+<section class="panel mb-4" hx-get="/admin/pages/{{ page.id }}/analytics" hx-trigger="load" hx-swap="innerHTML">
+  <h2>{{ _("analytics.page") }}</h2>
+  <p class="lede">{{ _("analytics.loading") }}</p>
+</section>
+{% endif %}
 {% include "admin/partials/notice.html" %}
 <p class="mb-4 flex flex-wrap gap-3">
   {% for locale_code in supported_locales %}

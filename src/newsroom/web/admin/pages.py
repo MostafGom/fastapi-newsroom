@@ -21,6 +21,7 @@ from newsroom.core.i18n import locale_info
 from newsroom.pages.models import PageStatus
 from newsroom.pages.schemas import PageAdminOut, PageCreate, PageTranslationIn, PageTranslationOut
 from newsroom.pages.service import PageService
+from newsroom.web.admin.rollups import load_desk
 from newsroom.web.templating import templates
 
 router = APIRouter(
@@ -141,7 +142,26 @@ async def page_edit(
             "body_json": json.dumps(_body(found, code)),
             "notice": notice,
             "detail": detail,
+            "can_view_analytics": staff.grants.sections_with(Perm.ANALYTICS_READ) is None,
         },
+    )
+
+
+@router.get("/pages/{page_id}/analytics", response_class=HTMLResponse)
+async def page_analytics(
+    page_id: uuid.UUID, request: Request, staff: CurrentStaff, db: DbSession
+) -> HTMLResponse:
+    _require(staff, Perm.PAGE_MANAGE)
+    if staff.grants.sections_with(Perm.ANALYTICS_READ) is not None:
+        raise PermissionDenied("You cannot view these analytics")
+    pages = await PageService(db).list_admin(staff)
+    if not any(item.id == page_id for item in pages):
+        raise NotFound("Page not found")
+    report = await load_desk(request, db, lambda desk: desk.page(page_id))
+    return templates.TemplateResponse(
+        request,
+        "admin/partials/window_analytics.html",
+        {"heading": "analytics.page", "lede": "analytics.page_lede", "report": report},
     )
 
 

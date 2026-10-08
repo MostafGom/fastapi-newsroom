@@ -54,6 +54,11 @@
             <span x-show="open" x-cloak>{{ _("manage.close") }}</span>
           </button>
         </div>
+        {% if staff.grants.has(perms.ANALYTICS_READ, section_id=section.id) %}
+          <div class="mt-4" hx-get="/admin/sections/{{ section.id }}/analytics" hx-trigger="load" hx-swap="innerHTML">
+            <p class="lede">{{ _("analytics.loading") }}</p>
+          </div>
+        {% endif %}
         <form class="form mt-4" method="post" action="/admin/sections/{{ section.id }}" x-show="open" x-cloak>
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <label class="field">{{ _("manage.sort") }}

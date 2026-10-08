@@ -56,6 +56,8 @@ async def refresh_analytics(
         await repo.replace_site_bucket("stats_site_daily", bucket, end, bucket)
         await repo.replace_section_bucket("stats_section_daily", bucket, end, bucket)
         await repo.replace_referrers(bucket, end, bucket)
+        await repo.replace_devices(bucket, end, bucket)
+        await repo.replace_clicks(bucket, end, bucket)
     for days in WINDOWS:
         await repo.replace_windows(days, window_start(days, moment))
     await db.commit()

@@ -49,6 +49,7 @@ async def collect(request: Request, payload: CollectIn, settings: SettingsDep) -
                 "article_id": claims.article_id,
                 "section_id": claims.section_id,
                 "page_id": claims.page_id,
+                "tag_id": claims.tag_id,
                 "locale": claims.locale,
                 "surface": claims.surface,
                 "visitor_id": visitor,

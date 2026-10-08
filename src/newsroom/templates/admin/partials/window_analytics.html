@@ -1,0 +1,14 @@
+<h2>{{ _(heading) }}</h2>
+<p class="lede mb-3">{{ _(lede) }}</p>
+{% if report is none %}
+  <p role="status">{{ _("analytics.unavailable") }}</p>
+{% else %}
+  <h3 class="stat-label">{{ _("analytics.days7") }}</h3>
+  {% with headline=report.week %}
+    {% include "admin/partials/analytics_headline.html" %}
+  {% endwith %}
+  <h3 class="stat-label">{{ _("analytics.days28") }}</h3>
+  {% with headline=report.month %}
+    {% include "admin/partials/analytics_headline.html" %}
+  {% endwith %}
+{% endif %}

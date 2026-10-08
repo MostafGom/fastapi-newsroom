@@ -3,6 +3,7 @@
   <span class="font-bold" dir="ltr">{{ tag.key }}</span>
   <span class="text-sm text-muted">
     {% for code in supported_locales %}{% if tag.locales[code].name %}{{ tag.locales[code].name }}{% if not loop.last %} · {% endif %}{% endif %}{% endfor %}
+    {% if tag.views_7 is not none %} · {{ tag.views_7 }} {{ _("analytics.views") }} · {{ _("analytics.days7") }}{% endif %}
   </span>
 </li>
 {% endfor %}
