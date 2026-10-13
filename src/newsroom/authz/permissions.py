@@ -22,6 +22,7 @@ class Perm(StrEnum):
     TAG_MANAGE = "tag.manage"
     MEDIA_UPLOAD = "media.upload"
     MEDIA_MANAGE = "media.manage"
+    MEDIA_SOURCE = "media.source"
     LOCALE_MANAGE = "locale.manage"
     USER_READ = "user.read"
     USER_MANAGE = "user.manage"
@@ -54,6 +55,7 @@ PERMISSION_DESCRIPTIONS: dict[Perm, str] = {
     Perm.TAG_MANAGE: "Manage tags",
     Perm.MEDIA_UPLOAD: "Upload media",
     Perm.MEDIA_MANAGE: "Edit or delete any media",
+    Perm.MEDIA_SOURCE: "Download an upload as received, with its location and camera data",
     Perm.LOCALE_MANAGE: "Manage locales",
     Perm.USER_READ: "View user accounts",
     Perm.USER_MANAGE: "Create and suspend user accounts below own rank",

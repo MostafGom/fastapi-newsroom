@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import structlog
-from PIL import Image
+from PIL import Image, ImageOps
 from sqlalchemy import String, cast, or_, select, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from newsroom.authz.permissions import Perm
 from newsroom.core.config import Settings, get_settings
 from newsroom.core.errors import Conflict, NotFound, PermissionDenied
 from newsroom.core.schemas import Page, PageParams, decode_keyset, encode_cursor
+from newsroom.media.metadata import MalformedImage, strip_metadata
 from newsroom.media.models import MediaAsset, MediaTranslation
 from newsroom.media.schemas import MediaOut, MediaTranslationIn
 
@@ -62,18 +63,23 @@ class MediaService:
         image = await asyncio.to_thread(_decode, data)
         asset_id = uuid.uuid7()
         key = f"{asset_id}.{image.ext}"
-        paths = (self._path(key), self._path(f"{asset_id}.display.jpg"))
+        paths = (
+            self._path(key),
+            self._path(f"{asset_id}.display.jpg"),
+            self._path(_source_key(key)),
+        )
         try:
             paths[0].parent.mkdir(parents=True, exist_ok=True)
-            paths[0].write_bytes(data)
+            paths[0].write_bytes(image.original)
             paths[1].write_bytes(image.display)
+            paths[2].write_bytes(data)
             asset = MediaAsset(
                 id=asset_id,
                 storage_key=key,
                 mime_type=image.mime,
                 width=image.width,
                 height=image.height,
-                byte_size=len(data),
+                byte_size=len(image.original),
                 filename=_filename(filename),
                 credit=credit,
                 uploaded_by=actor.user.id,
@@ -87,7 +93,11 @@ class MediaService:
                 action="media.uploaded",
                 entity_type="media_asset",
                 entity_id=asset.id,
-                after={"mime_type": image.mime, "byte_size": len(data), "filename": asset.filename},
+                after={
+                    "mime_type": image.mime,
+                    "byte_size": len(image.original),
+                    "filename": asset.filename,
+                },
             )
             await self.db.commit()
         except BaseException:
@@ -236,7 +246,11 @@ class MediaService:
             entity_id=asset.id,
             before={"storage_key": asset.storage_key, "mime_type": asset.mime_type},
         )
-        for key in (asset.storage_key, f"{asset.id}.display.jpg"):
+        for key in (
+            asset.storage_key,
+            f"{asset.id}.display.jpg",
+            _source_key(asset.storage_key),
+        ):
             path = self._path(key)
             if path.is_file():
                 path.unlink()
@@ -312,18 +326,81 @@ class MediaService:
             asset_id for asset_id, needle in zip(asset_ids, needles, strict=True) if needle in blob
         }
 
-    async def file(self, asset_id: uuid.UUID, *, original: bool = False) -> tuple[Path, str]:
+    async def file(self, asset_id: uuid.UUID) -> tuple[Path, str]:
+        """The public copy: the display JPEG, or the stored file if no display copy exists."""
         asset = await self.db.get(MediaAsset, asset_id)
         if asset is None:
             raise NotFound("Media not found")
-        if not original:
-            display = self._path(f"{asset.id}.display.jpg")
-            if display.is_file():
-                return display, "image/jpeg"
+        display = self._path(f"{asset.id}.display.jpg")
+        if display.is_file():
+            return display, "image/jpeg"
+        return self._stored(asset)
+
+    async def original_file(
+        self, viewer: Principal | None, asset_id: uuid.UUID
+    ) -> tuple[Path, str]:
+        """The uploaded file is for the desk. Files from before stripping may still hold GPS."""
+        if viewer is None:
+            raise NotFound("Media not found")
+        asset = await self.db.get(MediaAsset, asset_id)
+        if asset is None:
+            raise NotFound("Media not found")
+        return self._stored(asset)
+
+    async def source_file(self, actor: Principal, asset_id: uuid.UUID) -> tuple[Path, str, str]:
+        """The upload as received, with GPS and camera data, for verification.
+
+        Super admin only, and every download is audited because the file can locate a source.
+        """
+        if not actor.grants.has(Perm.MEDIA_SOURCE):
+            raise PermissionDenied("Missing permission: media.source")
+        asset = await self.db.get(MediaAsset, asset_id)
+        if asset is None:
+            raise NotFound("Media not found")
+        path = self._path(_source_key(asset.storage_key))
+        if not path.is_file():
+            raise NotFound("No untouched copy was kept for this image")
+        record_event(
+            self.db,
+            actor_id=actor.user.id,
+            action="media.source_downloaded",
+            entity_type="media_asset",
+            entity_id=asset.id,
+        )
+        await self.db.commit()
+        name = asset.filename or asset.storage_key
+        return path, asset.mime_type, name
+
+    def _stored(self, asset: MediaAsset) -> tuple[Path, str]:
         path = self._path(asset.storage_key)
         if not path.is_file():
             raise NotFound("Media not found")
         return path, asset.mime_type
+
+    async def strip_stored(self) -> tuple[int, int]:
+        """Remove metadata from files uploaded before stripping. Returns (changed, unreadable)."""
+        changed = unreadable = 0
+        for asset in (await self.db.scalars(select(MediaAsset))).all():
+            try:
+                path = self._stored(asset)[0]
+                data = path.read_bytes()
+                stripped = strip_metadata(data, asset.mime_type)
+            except NotFound, MalformedImage:
+                unreadable += 1
+                continue
+            if stripped == data:
+                continue
+            spare = path.with_name(f"{path.name}.strip")
+            spare.write_bytes(stripped)
+            source = self._path(_source_key(asset.storage_key))
+            if not source.exists():
+                # Keep the file as received for verification before stripping it.
+                path.replace(source)
+            spare.replace(path)
+            asset.byte_size = len(stripped)
+            changed += 1
+        await self.db.commit()
+        return changed, unreadable
 
     async def caption(self, asset_id: uuid.UUID, locale: str) -> tuple[str | None, str | None]:
         asset = await self.db.scalar(
@@ -344,6 +421,11 @@ class MediaService:
         if path.parent != root:
             raise NotFound("Media not found")
         return path
+
+
+def _source_key(storage_key: str) -> str:
+    stem, _, ext = storage_key.rpartition(".")
+    return f"{stem}.source.{ext}"
 
 
 def _like(term: str) -> str:
@@ -385,30 +467,45 @@ class _Decoded:
     ext: str
     width: int
     height: int
+    original: bytes
     display: bytes
 
 
+_ORIENTATION = 0x0112
+_SIDEWAYS = {5, 6, 7, 8}
 _FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/gif": "GIF", "image/webp": "WEBP"}
 
 
 def _decode(data: bytes) -> _Decoded:
-    """Decode the whole image once and render the display JPEG. Runs off the event loop.
+    """Strip metadata, decode the whole image once, and render the display JPEG.
 
-    The pixel count is read from the header and refused before any pixels are decoded.
+    Runs off the event loop. The pixel count is read from the header and refused before
+    any pixels are decoded.
     """
     mime, ext = _sniff(data)
     try:
-        with Image.open(io.BytesIO(data), formats=[_FORMATS[mime]]) as image:
+        original = strip_metadata(data, mime)
+        with Image.open(io.BytesIO(original), formats=[_FORMATS[mime]]) as image:
             width, height = image.size
             if width * height > _MAX_PIXELS:
                 raise Conflict("Image is larger than 50 megapixels")
             image.draft("RGB", (_DISPLAY_EDGE, _DISPLAY_EDGE))
             frame = image.convert("RGB")
+            if image.getexif().get(_ORIENTATION) in _SIDEWAYS:
+                width, height = height, width
     except Image.DecompressionBombError as exc:
         raise Conflict("Image is larger than 50 megapixels") from exc
     except OSError, ValueError, SyntaxError, EOFError:
         raise Conflict("The image could not be read") from None
+    ImageOps.exif_transpose(frame, in_place=True)
     frame.thumbnail((_DISPLAY_EDGE, _DISPLAY_EDGE))
     out = io.BytesIO()
     frame.save(out, format="JPEG", quality=82, optimize=True)
-    return _Decoded(mime=mime, ext=ext, width=width, height=height, display=out.getvalue())
+    return _Decoded(
+        mime=mime,
+        ext=ext,
+        width=width,
+        height=height,
+        original=original,
+        display=out.getvalue(),
+    )

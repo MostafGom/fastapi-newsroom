@@ -407,6 +407,7 @@
   "media.rename": "تغيير الاسم",
   "media.unnamed": "بلا اسم",
   "media.open": "عرض الصورة كاملة",
+  "media.source": "تنزيل الملف كما وصل، مع بيانات الموقع",
   "account.registration_closed": "التسجيل مغلق.",
   "flow.nav": "مسار العمل",
   "flow.title": "كيف تصل المادة إلى النشر",

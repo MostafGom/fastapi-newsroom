@@ -16,6 +16,7 @@ from newsroom.core.config import get_settings
 from newsroom.core.db import create_analytics_engine, create_engine, create_sessionmaker
 from newsroom.core.errors import AppError
 from newsroom.locales.seed import seed_locales
+from newsroom.media.service import MediaService
 from newsroom.search.service import SearchService
 from newsroom.seed.analytics import seed_analytics
 from newsroom.seed.demo import seed_demo
@@ -109,6 +110,17 @@ def reindex() -> None:
         count = await SearchService(db).reindex()
         await db.commit()
         typer.echo(f"search documents checked: {count}")
+
+    run_with_db(job)
+
+
+@app.command("strip-media")
+def strip_media() -> None:
+    """Remove GPS, camera, and other metadata from images uploaded before it was stripped."""
+
+    async def job(db: AsyncSession) -> None:
+        changed, unreadable = await MediaService(db).strip_stored()
+        typer.echo(f"images stripped: {changed}, unreadable or missing: {unreadable}")
 
     run_with_db(job)
 

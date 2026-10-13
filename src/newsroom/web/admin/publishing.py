@@ -5,7 +5,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from newsroom.auth.dependencies import csrf_protect_web
 from newsroom.auth.principal import Principal
@@ -102,6 +102,7 @@ async def media_page(
             "locales": getattr(request.state, "enabled_locales", None)
             or get_settings().supported_locales,
             "can_manage": staff.grants.has_anywhere(Perm.MEDIA_MANAGE),
+            "can_download_source": staff.grants.has(Perm.MEDIA_SOURCE),
             "notice": notice if notice in {"saved", "error"} else None,
             "detail": detail,
             **pager_context(
@@ -134,6 +135,16 @@ async def upload_media(
             _media_back(notice="error", q="", page=1, detail=exc.detail), status_code=303
         )
     return RedirectResponse(_media_back(notice="saved", q="", page=1), status_code=303)
+
+
+@router.get("/media/{asset_id}/source")
+async def download_media_source(
+    asset_id: uuid.UUID, staff: CurrentStaff, db: DbSession
+) -> FileResponse:
+    path, mime, name = await MediaService(db).source_file(staff, asset_id)
+    return FileResponse(
+        path, media_type=mime, filename=name, headers={"Cache-Control": "private, no-store"}
+    )
 
 
 @router.post("/media/{asset_id}/caption")

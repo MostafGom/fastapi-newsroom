@@ -11,6 +11,9 @@
   {% if asset.id in in_use %}
     <p class="meta">{{ _("media.in_use") }}</p>
   {% endif %}
+  {% if can_download_source %}
+    <p class="meta"><a href="/admin/media/{{ asset.id }}/source" download>{{ _("media.source") }}</a></p>
+  {% endif %}
   <details>
     <summary class="btn-quiet">{{ _("media.edit") }}</summary>
     <form class="form" method="post" action="/admin/media/{{ asset.id }}/name">

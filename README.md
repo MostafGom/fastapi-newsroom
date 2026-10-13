@@ -46,6 +46,7 @@ production database gets locales and roles only, then a real super admin:
 uv run newsroom bootstrap          # locales and system roles; no accounts or content (idempotent)
 uv run newsroom create-superadmin
 uv run newsroom reindex            # rebuild public search from live stories (safe to rerun)
+uv run newsroom strip-media        # strip GPS and camera data from older uploads; super admins keep the file as received
 
 uv run uvicorn newsroom.asgi:app --reload      # http://localhost:8000
 uv run python -m newsroom.worker               # background jobs (separate process)
