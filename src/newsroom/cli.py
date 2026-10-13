@@ -41,12 +41,39 @@ def run_with_db[T](fn: Callable[[AsyncSession], Awaitable[T]]) -> T:
         raise typer.Exit(1) from exc
 
 
+async def _bootstrap(db: AsyncSession) -> None:
+    added = await seed_locales(db)
+    result = await seed_rbac(db)
+    typer.echo(f"locales added: {added}")
+    typer.echo(f"permissions: {result.permissions}, system roles: {result.roles}")
+    if result.removed_permissions:
+        removed = ", ".join(result.removed_permissions)
+        typer.echo(f"removed stale permissions: {removed}")
+
+
+@app.command()
+def bootstrap() -> None:
+    """Create locales and system roles. Safe in production; adds no accounts or content."""
+    run_with_db(_bootstrap)
+
+
 @app.command()
 def seed() -> None:
-    """Seed locales, roles, demo stories, and demo traffic.
+    """Bootstrap, then add demo accounts, demo stories, and demo traffic.
 
     Replaces every row in the analytics database named by ANALYTICS_DATABASE_URL.
+    Refuses to run when ENVIRONMENT=production: the demo accounts share a published password.
     """
+    if get_settings().is_production:
+        typer.secho(
+            "Error: `newsroom seed` adds demo accounts with a published password and replaces "
+            "analytics data, so it does not run when ENVIRONMENT=production. Use "
+            "`newsroom bootstrap` and `newsroom create-superadmin`. A demo server should run "
+            "with ENVIRONMENT=development.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
 
     async def job() -> None:
         settings = get_settings()
@@ -54,13 +81,7 @@ def seed() -> None:
         analytics_engine = create_analytics_engine(settings)
         try:
             async with create_sessionmaker(engine)() as db:
-                added = await seed_locales(db)
-                result = await seed_rbac(db)
-                typer.echo(f"locales added: {added}")
-                typer.echo(f"permissions: {result.permissions}, system roles: {result.roles}")
-                if result.removed_permissions:
-                    removed = ", ".join(result.removed_permissions)
-                    typer.echo(f"removed stale permissions: {removed}")
+                await _bootstrap(db)
                 for line in await seed_demo(db):
                     typer.echo(line)
                 for line in await seed_volume(db):

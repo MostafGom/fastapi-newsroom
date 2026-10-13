@@ -36,6 +36,15 @@ cp .env.example .env          # fill in DATABASE_URL, TEST_DATABASE_URL, SECRET_
 uv run alembic upgrade head   # schema
 uv run newsroom seed          # locales, roles, demo accounts and stories (idempotent)
 uv run newsroom create-superadmin  # optional; seed already includes a demo super admin
+```
+
+`newsroom seed` is for development and demos. It refuses to run when `ENVIRONMENT=production`,
+because the demo accounts share a published password and it replaces the analytics data. A
+production database gets locales and roles only, then a real super admin:
+
+```bash
+uv run newsroom bootstrap          # locales and system roles; no accounts or content (idempotent)
+uv run newsroom create-superadmin
 
 uv run uvicorn newsroom.asgi:app --reload      # http://localhost:8000
 uv run python -m newsroom.worker               # background jobs (separate process)

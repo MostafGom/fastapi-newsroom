@@ -33,7 +33,7 @@ The worker publishes scheduled stories and sends the daily briefing. Start it on
 uv run python -m newsroom.worker
 ```
 
-`newsroom seed` is idempotent. It creates locales, roles, demo accounts, the original three stories plus a spread of desk states (draft, copy, changes requested, approved, killed, legal hold, takedown, archive, republish, correction), four published site pages, and about 100 extra published briefs (200 localizations) for the **dev** database. A second run does not duplicate them.
+`newsroom seed` is idempotent and refuses to run when `ENVIRONMENT=production`; a demo server runs with `ENVIRONMENT=development`. Production uses `newsroom bootstrap` (locales and roles only) and then `newsroom create-superadmin`. Seed creates locales, roles, demo accounts, the original three stories plus a spread of desk states (draft, copy, changes requested, approved, killed, legal hold, takedown, archive, republish, correction), four published site pages, and about 100 extra published briefs (200 localizations) for the **dev** database. A second run does not duplicate them.
 
 Demo password for every `demo-*` account: `demo-password-123`.
 

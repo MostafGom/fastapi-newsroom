@@ -73,7 +73,7 @@ class UserService:
         if role_key is not None:
             role = await self.db.scalar(select(Role).where(Role.key == role_key))
             if role is None:
-                raise NotFound(f"Unknown role '{role_key}'. Run `newsroom seed` first.")
+                raise NotFound(f"Unknown role '{role_key}'. Run `newsroom bootstrap` first.")
             self.db.add(
                 UserRole(
                     user_id=user.id, role_id=role.id, section_id=section_id, granted_by=actor_id
