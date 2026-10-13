@@ -254,6 +254,8 @@ class ArticleService:
         if payload.tag_ids is not None:
             article.article_tags.clear()
             article.article_tags.extend(ArticleTag(tag_id=tag_id) for tag_id in payload.tag_ids)
+        await self._flush_article()
+        await SearchService(self.db).sync_article(article.id)
         await self._commit_article()
         return await self._admin_out(article.id)
 
@@ -540,13 +542,8 @@ class ArticleService:
             },
             reason=payload.reason,
         )
-        if payload.action in {
-            ArticleAction.PUBLISH,
-            ArticleAction.REPUBLISH,
-            ArticleAction.PUBLISH_UPDATE,
-            ArticleAction.UNPUBLISH,
-        }:
-            await self._sync_search(localization.id)
+        # Any transition can move a story into or out of the live set (archive, unarchive...).
+        await self._sync_search(localization.id)
         await self._commit_article()
         return self._localization_out(localization)
 

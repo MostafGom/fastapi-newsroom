@@ -16,6 +16,7 @@ from newsroom.core.config import get_settings
 from newsroom.core.db import create_analytics_engine, create_engine, create_sessionmaker
 from newsroom.core.errors import AppError
 from newsroom.locales.seed import seed_locales
+from newsroom.search.service import SearchService
 from newsroom.seed.analytics import seed_analytics
 from newsroom.seed.demo import seed_demo
 from newsroom.seed.volume import seed_volume
@@ -98,6 +99,18 @@ def seed() -> None:
     except AppError as exc:
         typer.secho(f"Error: {exc.detail or exc.code}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
+
+
+@app.command()
+def reindex() -> None:
+    """Rebuild public search from the live stories, dropping anything no longer published."""
+
+    async def job(db: AsyncSession) -> None:
+        count = await SearchService(db).reindex()
+        await db.commit()
+        typer.echo(f"search documents checked: {count}")
+
+    run_with_db(job)
 
 
 @app.command("create-superadmin")

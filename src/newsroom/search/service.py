@@ -14,6 +14,7 @@ from newsroom.articles.models import (
 )
 from newsroom.articles.workflow import ArticleStatus
 from newsroom.core.schemas import Page, PageParams
+from newsroom.search.models import SearchDocument
 from newsroom.search.repository import PostgresSearch
 from newsroom.search.schemas import IndexedStory, SearchFilters, SearchHit
 from newsroom.taxonomy.models import Section, Tag
@@ -25,7 +26,12 @@ class SearchService:
         self.engine = PostgresSearch(db)
 
     async def sync(self, localization_id: uuid.UUID) -> None:
-        """Index a live story, or drop it. Caller commits with the publish or takedown."""
+        """Index a live story, or drop it. Caller commits with the publish or takedown.
+
+        Pending changes are flushed and the story is re-read, so a section, tag, or status
+        changed earlier in this transaction is what gets indexed.
+        """
+        await self.db.flush()
         localization = await self._load(localization_id)
         if (
             localization is None
@@ -65,6 +71,38 @@ class SearchService:
             )
         )
 
+    async def sync_article(self, article_id: uuid.UUID) -> None:
+        """Re-index every language of one story (section, tags, or bylines changed)."""
+        ids = await self.db.scalars(
+            select(ArticleLocalization.id).where(ArticleLocalization.article_id == article_id)
+        )
+        for localization_id in ids.all():
+            await self.sync(localization_id)
+
+    async def sync_section(self, section_id: uuid.UUID) -> None:
+        """Re-index the live stories of one section (its name or slug changed)."""
+        ids = await self.db.scalars(
+            select(ArticleLocalization.id)
+            .join(Article, Article.id == ArticleLocalization.article_id)
+            .where(
+                Article.section_id == section_id,
+                ArticleLocalization.status == ArticleStatus.PUBLISHED,
+            )
+        )
+        for localization_id in ids.all():
+            await self.sync(localization_id)
+
+    async def reindex(self) -> int:
+        """Rebuild the index: every live story, and drop documents for anything else."""
+        live = select(ArticleLocalization.id).where(
+            ArticleLocalization.status == ArticleStatus.PUBLISHED
+        )
+        indexed = select(SearchDocument.localization_id)
+        ids = (await self.db.scalars(live.union(indexed))).all()
+        for localization_id in ids:
+            await self.sync(localization_id)
+        return len(ids)
+
     async def search(self, filters: SearchFilters, paging: PageParams) -> Page[SearchHit]:
         return await self.engine.search(filters, paging)
 
@@ -86,6 +124,7 @@ class SearchService:
                 .selectinload(ArticleTag.tag)
                 .selectinload(Tag.translations),
             )
+            .execution_options(populate_existing=True)
         )
 
 

@@ -49,7 +49,7 @@ class TaxonomyService:
             section.is_active = payload.is_active
         if payload.translations is not None:
             _replace_section_translations(section, payload.translations)
-        return await self._save_section(section)
+        return await self._save_section(section, reindex=payload.translations is not None)
 
     async def list_admin_sections(self, q: str | None = None) -> list[SectionAdminOut]:
         stmt = select(Section).order_by(Section.sort_order, Section.key)
@@ -167,9 +167,12 @@ class TaxonomyService:
             next_cursor = rows[-1].key
         return Page(items=[_tag_admin(row) for row in rows], next_cursor=next_cursor)
 
-    async def _save_section(self, section: Section) -> SectionAdminOut:
+    async def _save_section(self, section: Section, *, reindex: bool = False) -> SectionAdminOut:
         self.db.add(section)
         try:
+            if reindex:
+                await self.db.flush()
+                await SearchService(self.db).sync_section(section.id)
             await self.db.commit()
         except IntegrityError as exc:
             await self.db.rollback()
