@@ -415,6 +415,8 @@ class UserService:
             password_hash=hash_password(password),
             kind=UserKind.READER,
             status=UserStatus.ACTIVE,
+            # Set both profiles so ``display_name`` never lazy-loads after commit (async).
+            staff_profile=None,
             reader_profile=ReaderProfile(display_name=display_name, preferred_locale=locale),
         )
         self.users.add(user)

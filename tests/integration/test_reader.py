@@ -120,3 +120,25 @@ async def test_reader_updates_profile_and_bookmarks(db: AsyncSession, client: As
     assert marked.status_code == 303
     restored = await client.get("/en/account")
     assert "Cabinet approves the 2027 budget" in restored.text
+
+
+async def test_api_registration_returns_the_new_reader(client: AsyncClient) -> None:
+    registered = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "New-Reader@Example.com",
+            "password": "correct-horse-battery",
+            "display_name": "Rana",
+        },
+    )
+    assert registered.status_code == 201, registered.text
+    body = registered.json()
+    assert body["email"] == "new-reader@example.com"
+    assert body["kind"] == "reader"
+    assert body["display_name"] == "Rana"
+
+    again = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "new-reader@example.com", "password": "correct-horse-battery"},
+    )
+    assert again.status_code == 409
