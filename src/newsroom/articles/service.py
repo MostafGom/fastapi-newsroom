@@ -1406,9 +1406,7 @@ class ArticleService:
             return False
         if article.created_by == actor.user.id:
             return True
-        return actor.grants.has(
-            Perm.ARTICLE_READ, section_id=article.section_id
-        ) or actor.grants.has_anywhere(Perm.ARTICLE_READ)
+        return actor.grants.has(Perm.ARTICLE_READ, section_id=article.section_id)
 
 
 class _Due:

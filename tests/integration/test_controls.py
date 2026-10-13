@@ -445,3 +445,31 @@ async def test_a_write_checks_lock_version_against_the_committed_row(
         json={"action": "submit", "lock_version": 2},
     )
     assert current.status_code == 200, current.text
+
+
+async def test_a_section_editor_cannot_read_another_sections_story(
+    client: AsyncClient, db: AsyncSession, make_staff: MakeStaff
+) -> None:
+    politics = await _section(db, "scope-politics")
+    sports = await _section(db, "scope-sports")
+    writer = await make_staff("writer")
+    politics_editor = await make_staff("editor", section_id=politics.id)
+    sports_editor = await make_staff("editor", section_id=sports.id)
+    author = await author_for_user(db, writer.id)  # type: ignore[arg-type]
+    assert author is not None
+    csrf = await api_login(client, writer)
+    localization_id = await _create(client, csrf, str(politics.id), str(author.id), "scoped")
+
+    client.cookies.clear()
+    await api_login(client, sports_editor)
+    for path in ("", "/history"):
+        denied = await client.get(f"/api/v1/admin/localizations/{localization_id}{path}")
+        assert denied.status_code == 403, (path, denied.text)
+    listed = await client.get("/api/v1/admin/articles")
+    assert localization_id not in listed.text
+
+    client.cookies.clear()
+    await api_login(client, politics_editor)
+    for path in ("", "/history"):
+        allowed = await client.get(f"/api/v1/admin/localizations/{localization_id}{path}")
+        assert allowed.status_code == 200, (path, allowed.text)
