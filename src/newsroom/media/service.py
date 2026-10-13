@@ -1,9 +1,11 @@
+import asyncio
 import io
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 import structlog
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 from sqlalchemy import String, cast, or_, select, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +25,11 @@ from newsroom.media.schemas import MediaOut, MediaTranslationIn
 
 log = structlog.get_logger(__name__)
 
-_MAX_BYTES = 8 * 1024 * 1024
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+# About 8700 x 5800. A small compressed file can claim far more pixels than the server can hold.
+_MAX_PIXELS = 50_000_000
+_DISPLAY_EDGE = 1600
+_CREDIT_LENGTH = 200
 _TYPES = {
     b"\xff\xd8\xff": ("image/jpeg", "jpg"),
     b"\x89PNG\r\n\x1a\n": ("image/png", "png"),
@@ -48,39 +54,47 @@ class MediaService:
     ) -> MediaOut:
         if not actor.grants.has_anywhere(Perm.MEDIA_UPLOAD):
             raise PermissionDenied("Missing permission: media.upload")
-        if len(data) > _MAX_BYTES:
+        if len(data) > MAX_UPLOAD_BYTES:
             raise Conflict("Image is larger than 8MB")
-        mime, ext = _sniff(data)
-        width, height = _dimensions(data, mime)
+        credit = _blank(credit)
+        if credit is not None and len(credit) > _CREDIT_LENGTH:
+            raise Conflict("Credit is longer than 200 characters")
+        image = await asyncio.to_thread(_decode, data)
         asset_id = uuid.uuid7()
-        key = f"{asset_id}.{ext}"
-        path = self._path(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        _write_display(self._path(f"{asset_id}.display.jpg"), data)
-        asset = MediaAsset(
-            id=asset_id,
-            storage_key=key,
-            mime_type=mime,
-            width=width,
-            height=height,
-            byte_size=len(data),
-            filename=_filename(filename),
-            credit=credit.strip() if credit else None,
-            uploaded_by=actor.user.id,
-            created_at=utcnow(),
-        )
-        self.db.add(asset)
-        set_committed_value(asset, "translations", [])
-        record_event(
-            self.db,
-            actor_id=actor.user.id,
-            action="media.uploaded",
-            entity_type="media_asset",
-            entity_id=asset.id,
-            after={"mime_type": mime, "byte_size": len(data), "filename": asset.filename},
-        )
-        await self.db.commit()
+        key = f"{asset_id}.{image.ext}"
+        paths = (self._path(key), self._path(f"{asset_id}.display.jpg"))
+        try:
+            paths[0].parent.mkdir(parents=True, exist_ok=True)
+            paths[0].write_bytes(data)
+            paths[1].write_bytes(image.display)
+            asset = MediaAsset(
+                id=asset_id,
+                storage_key=key,
+                mime_type=image.mime,
+                width=image.width,
+                height=image.height,
+                byte_size=len(data),
+                filename=_filename(filename),
+                credit=credit,
+                uploaded_by=actor.user.id,
+                created_at=utcnow(),
+            )
+            self.db.add(asset)
+            set_committed_value(asset, "translations", [])
+            record_event(
+                self.db,
+                actor_id=actor.user.id,
+                action="media.uploaded",
+                entity_type="media_asset",
+                entity_id=asset.id,
+                after={"mime_type": image.mime, "byte_size": len(data), "filename": asset.filename},
+            )
+            await self.db.commit()
+        except BaseException:
+            # A row that never committed must not leave its files behind.
+            for path in paths:
+                path.unlink(missing_ok=True)
+            raise
         await self._store_generated(actor, asset)
         return MediaOut.model_validate(asset, from_attributes=True)
 
@@ -349,16 +363,6 @@ def _filename(raw: str | None) -> str | None:
     return name[:200]
 
 
-def _write_display(path: Path, data: bytes) -> None:
-    try:
-        with Image.open(io.BytesIO(data)) as image:
-            frame = image.convert("RGB")
-            frame.thumbnail((1600, 1600))
-            frame.save(path, format="JPEG", quality=82, optimize=True)
-    except OSError, UnidentifiedImageError:
-        return
-
-
 def _blank(value: str | None) -> str | None:
     if value is None:
         return None
@@ -375,28 +379,36 @@ def _sniff(data: bytes) -> tuple[str, str]:
     raise Conflict("File must be a JPEG, PNG, GIF, or WebP image")
 
 
-def _dimensions(data: bytes, mime: str) -> tuple[int | None, int | None]:
-    if mime == "image/png" and len(data) >= 24:
-        return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
-    if mime == "image/gif" and len(data) >= 10:
-        return int.from_bytes(data[6:8], "little"), int.from_bytes(data[8:10], "little")
-    if mime == "image/jpeg":
-        return _jpeg_size(data)
-    return None, None
+@dataclass(frozen=True)
+class _Decoded:
+    mime: str
+    ext: str
+    width: int
+    height: int
+    display: bytes
 
 
-def _jpeg_size(data: bytes) -> tuple[int | None, int | None]:
-    index = 2
-    while index + 9 < len(data):
-        if data[index] != 0xFF:
-            break
-        marker = data[index + 1]
-        if marker in {0xC0, 0xC1, 0xC2}:
-            height = int.from_bytes(data[index + 5 : index + 7], "big")
-            width = int.from_bytes(data[index + 7 : index + 9], "big")
-            return width, height
-        if index + 4 > len(data):
-            break
-        length = int.from_bytes(data[index + 2 : index + 4], "big")
-        index += 2 + length
-    return None, None
+_FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/gif": "GIF", "image/webp": "WEBP"}
+
+
+def _decode(data: bytes) -> _Decoded:
+    """Decode the whole image once and render the display JPEG. Runs off the event loop.
+
+    The pixel count is read from the header and refused before any pixels are decoded.
+    """
+    mime, ext = _sniff(data)
+    try:
+        with Image.open(io.BytesIO(data), formats=[_FORMATS[mime]]) as image:
+            width, height = image.size
+            if width * height > _MAX_PIXELS:
+                raise Conflict("Image is larger than 50 megapixels")
+            image.draft("RGB", (_DISPLAY_EDGE, _DISPLAY_EDGE))
+            frame = image.convert("RGB")
+    except Image.DecompressionBombError as exc:
+        raise Conflict("Image is larger than 50 megapixels") from exc
+    except OSError, ValueError, SyntaxError, EOFError:
+        raise Conflict("The image could not be read") from None
+    frame.thumbnail((_DISPLAY_EDGE, _DISPLAY_EDGE))
+    out = io.BytesIO()
+    frame.save(out, format="JPEG", quality=82, optimize=True)
+    return _Decoded(mime=mime, ext=ext, width=width, height=height, display=out.getvalue())

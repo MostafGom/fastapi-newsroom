@@ -11,7 +11,7 @@ from newsroom.authz.permissions import Perm
 from newsroom.core.db import DbSession
 from newsroom.core.schemas import PROBLEM_RESPONSES
 from newsroom.media.schemas import MediaNameIn, MediaOut, MediaTranslationIn
-from newsroom.media.service import MediaService
+from newsroom.media.service import MAX_UPLOAD_BYTES, MediaService
 from newsroom.pages.schemas import PageAdminOut, PageCreate, PageTranslationIn
 from newsroom.pages.service import PageService
 
@@ -35,7 +35,7 @@ async def upload_media(
     credit: Annotated[str | None, Form()] = None,
 ) -> MediaOut:
     return await MediaService(db).upload(
-        staff, await file.read(), credit=credit, filename=file.filename
+        staff, await file.read(MAX_UPLOAD_BYTES + 1), credit=credit, filename=file.filename
     )
 
 

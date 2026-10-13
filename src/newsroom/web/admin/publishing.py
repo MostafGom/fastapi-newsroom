@@ -16,7 +16,7 @@ from newsroom.core.db import DbSession
 from newsroom.core.errors import AppError, PermissionDenied
 from newsroom.core.schemas import PageParams
 from newsroom.media.schemas import MediaTranslationIn
-from newsroom.media.service import MediaService
+from newsroom.media.service import MAX_UPLOAD_BYTES, MediaService
 from newsroom.web.paging import MAX_PAGE, PageQuery, is_fragment, listing_params, pager_context
 from newsroom.web.templating import templates
 
@@ -127,7 +127,7 @@ async def upload_media(
     _require(staff, Perm.MEDIA_UPLOAD)
     try:
         await MediaService(db).upload(
-            staff, await file.read(), credit=credit, filename=file.filename
+            staff, await file.read(MAX_UPLOAD_BYTES + 1), credit=credit, filename=file.filename
         )
     except AppError as exc:
         return RedirectResponse(
