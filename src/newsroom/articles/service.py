@@ -260,7 +260,7 @@ class ArticleService:
     async def save_revision(
         self, actor: Principal, localization_id: uuid.UUID, payload: RevisionCreate
     ) -> RevisionOut:
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         self._require_edit(actor, localization.article, localization)
         if payload.kind is RevisionKind.AUTOSAVE:
             await self._require_media(payload.content.body)
@@ -289,7 +289,7 @@ class ArticleService:
 
     async def delete_localization(self, actor: Principal, localization_id: uuid.UUID) -> None:
         """Soft-delete a draft that has never been published. The row stays for the audit trail."""
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         await self.transition(
             actor,
             localization_id,
@@ -300,7 +300,7 @@ class ArticleService:
         self, actor: Principal, localization_id: uuid.UUID, reason: str
     ) -> None:
         """Block schedule, publish, and republish until counsel is recorded. Not a status."""
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         self._require(actor, Perm.ARTICLE_REVIEW, localization.article.section_id)
         self._require_reason(reason, "hold a story")
         if localization.legal_hold:
@@ -324,7 +324,7 @@ class ArticleService:
         self, actor: Principal, localization_id: uuid.UUID, reason: str
     ) -> None:
         """Record that counsel signed off. The editor is the user of the app, not counsel."""
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         self._require(actor, Perm.ARTICLE_CLEAR_LEGAL, localization.article.section_id)
         self._require_reason(reason, "clear a legal hold")
         if not localization.legal_hold:
@@ -347,7 +347,7 @@ class ArticleService:
         if not actor.grants.has_anywhere(Perm.ARTICLE_PURGE):
             raise PermissionDenied("Missing permission: article.purge")
         self._require_reason(reason, "purge a story")
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         article = localization.article
         current = self._revision(localization, localization.current_revision_id)
         record_event(
@@ -444,7 +444,7 @@ class ArticleService:
         revision_id: uuid.UUID,
         payload: RestoreRequest,
     ) -> RevisionOut:
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         article = localization.article
         self._require(actor, Perm.ARTICLE_RESTORE_REVISION, article.section_id)
         if localization.status is ArticleStatus.ARCHIVED:
@@ -492,7 +492,7 @@ class ArticleService:
     async def transition(
         self, actor: Principal, localization_id: uuid.UUID, payload
     ) -> LocalizationOut:
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         article = localization.article
         if localization.lock_version != payload.lock_version:
             raise VersionConflict("Article was updated by someone else")
@@ -553,7 +553,7 @@ class ArticleService:
     async def add_correction(
         self, actor: Principal, localization_id: uuid.UUID, payload: CorrectionCreate
     ) -> CorrectionOut:
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         self._require(actor, Perm.ARTICLE_CORRECT, localization.article.section_id)
         if localization.first_published_at is None:
             raise Conflict("A public note can only be added after the story has been published")
@@ -579,7 +579,7 @@ class ArticleService:
         self, actor: Principal, localization_id: uuid.UUID, payload: SlugChange
     ) -> LocalizationOut:
         """Point the localization at a new slug. A story that has been live keeps the old URL."""
-        localization = await self._localization(localization_id)
+        localization = await self._localization(localization_id, lock=True)
         article = localization.article
         if localization.first_published_at is not None:
             self._require(actor, Perm.ARTICLE_EDIT, article.section_id)
@@ -1085,8 +1085,12 @@ class ArticleService:
             raise NotFound("Article not found")
         return article
 
-    async def _localization(self, localization_id: uuid.UUID) -> ArticleLocalization:
-        localization = await self.db.scalar(
+    async def _localization(
+        self, localization_id: uuid.UUID, *, lock: bool = False
+    ) -> ArticleLocalization:
+        """Load one localization. ``lock`` is for writes: the row stays locked until commit,
+        and its columns are re-read, so ``lock_version`` is checked against committed state."""
+        query = (
             select(ArticleLocalization)
             .where(ArticleLocalization.id == localization_id)
             .options(
@@ -1096,6 +1100,11 @@ class ArticleService:
                 selectinload(ArticleLocalization.corrections),
             )
         )
+        if lock:
+            query = query.with_for_update(of=ArticleLocalization).execution_options(
+                populate_existing=True
+            )
+        localization = await self.db.scalar(query)
         if localization is None or localization.deleted_at is not None:
             raise NotFound("Article not found")
         return localization

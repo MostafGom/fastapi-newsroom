@@ -5,6 +5,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from newsroom.articles.models import ArticleRevision
@@ -415,3 +416,32 @@ async def test_tag_merge_media_delete_guest_byline_locale_role_and_registration(
         json={"email": "new-reader@example.com", "password": "correct-horse-battery"},
     )
     assert registered.status_code == 403
+
+
+async def test_a_write_checks_lock_version_against_the_committed_row(
+    client: AsyncClient, db: AsyncSession, make_staff: MakeStaff
+) -> None:
+    section = await _section(db, "lock-desk")
+    writer = await make_staff("writer")
+    author = await author_for_user(db, writer.id)  # type: ignore[arg-type]
+    assert author is not None
+    csrf = await api_login(client, writer)
+    localization_id = await _create(client, csrf, str(section.id), str(author.id), "lock-draft")
+
+    # Another transaction commits a change while this session still holds lock_version 1.
+    await db.execute(
+        text("UPDATE article_localizations SET lock_version = lock_version + 1 WHERE id = :id"),
+        {"id": uuid.UUID(localization_id)},
+    )
+    stale = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": csrf},
+        json={"action": "submit", "lock_version": 1},
+    )
+    assert stale.status_code == 409, stale.text
+    current = await client.post(
+        f"/api/v1/admin/localizations/{localization_id}/transitions",
+        headers={"x-csrf-token": csrf},
+        json={"action": "submit", "lock_version": 2},
+    )
+    assert current.status_code == 200, current.text
