@@ -360,6 +360,7 @@
   "pages.empty_translation": "لا طبعة لغة بعد.",
   "comments.heading": "التعليقات",
   "comments.empty": "لا تعليقات بعد.",
+  "comments.anonymous": "قارئ",
   "comments.submit": "إرسال",
   "comments.remove": "حذف",
   "comments.sign_in": "ادخل لكتابة تعليق",

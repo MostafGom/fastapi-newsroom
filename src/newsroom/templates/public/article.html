@@ -43,7 +43,7 @@
       <ul class="mt-4 grid gap-4">
         {% for comment in comments %}
           <li class="border-b border-line pb-4">
-            <p class="meta">{{ comment.author_name }}</p>
+            <p class="meta">{{ comment.author_name or _('comments.anonymous') }}</p>
             <p class="mt-1">{{ comment.body }}</p>
             {% if comment.mine %}
               <form class="mt-2" method="post" action="/{{ locale }}/article/{{ article.slug }}/comments/{{ comment.id }}/hide">

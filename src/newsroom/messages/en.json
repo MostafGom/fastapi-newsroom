@@ -360,6 +360,7 @@
   "pages.empty_translation": "No language yet.",
   "comments.heading": "Comments",
   "comments.empty": "No comments yet.",
+  "comments.anonymous": "Reader",
   "comments.submit": "Post comment",
   "comments.remove": "Remove",
   "comments.sign_in": "Sign in to comment",

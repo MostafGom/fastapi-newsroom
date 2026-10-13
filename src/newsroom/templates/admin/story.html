@@ -103,7 +103,7 @@
   <ul class="mt-3 grid gap-3">
     {% for comment in comments %}
       <li>
-        <p class="text-sm text-muted">{{ comment.author_name }}</p>
+        <p class="text-sm text-muted">{{ comment.author_name or _('comments.anonymous') }}</p>
         <p>{{ comment.body }}</p>
         {% if can_hide_comments %}
           <form method="post" action="/admin/stories/{{ story.id }}/comments/{{ comment.id }}/hide">

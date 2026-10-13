@@ -12,7 +12,7 @@ class CommentCreate(Schema):
 class CommentOut(Schema):
     id: uuid.UUID
     localization_id: uuid.UUID
-    author_name: str
+    author_name: str | None
     body: str
     created_at: UtcDatetime
     mine: bool = False

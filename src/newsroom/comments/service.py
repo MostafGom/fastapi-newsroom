@@ -127,7 +127,8 @@ class CommentService:
 
 def _out(comment: Comment, reader_id: uuid.UUID | None) -> CommentOut:
     user = comment.user
-    name = user.display_name or user.email
+    # Never fall back to the email: comments are public. Templates label a missing name.
+    name = (user.display_name or "").strip() or None
     return CommentOut(
         id=comment.id,
         localization_id=comment.localization_id,

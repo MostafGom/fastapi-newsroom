@@ -142,3 +142,32 @@ async def test_api_registration_returns_the_new_reader(client: AsyncClient) -> N
         json={"email": "new-reader@example.com", "password": "correct-horse-battery"},
     )
     assert again.status_code == 409
+
+
+async def test_a_comment_never_shows_the_readers_email(
+    db: AsyncSession, client: AsyncClient
+) -> None:
+    await seed_demo(db)
+    email = "nameless-reader@example.com"
+    registered = await client.post(
+        "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+    )
+    assert registered.status_code == 201, registered.text
+    form = await client.get("/en/login")
+    await client.post(
+        "/en/login",
+        data={"csrf_token": _csrf(form.text), "email": email, "password": "correct-horse-battery"},
+    )
+    story = await client.get("/en/article/cabinet-budget")
+    posted = await client.post(
+        "/en/article/cabinet-budget/comments",
+        data={"csrf_token": _csrf(story.text), "body": "Where is the annex?"},
+    )
+    assert posted.status_code == 303
+
+    client.cookies.clear()
+    public = await client.get("/en/article/cabinet-budget")
+    assert "Where is the annex?" in public.text
+    assert email not in public.text
+    assert "nameless-reader" not in public.text
+    assert '<p class="meta">Reader</p>' in public.text
