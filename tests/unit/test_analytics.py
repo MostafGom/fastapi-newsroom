@@ -63,6 +63,33 @@ def test_rate_gate_drops_the_extra_event() -> None:
     assert gate.allow("visitor", now=71)
 
 
+def test_a_new_visitor_id_per_request_does_not_get_past_the_address_limit() -> None:
+    gate = RateGate(limit=3, window_seconds=60)
+    accepted = [gate.allow("ip:203.0.113.9", f"visitor-{n}", now=10 + n / 100) for n in range(500)]
+    assert accepted.count(True) == 3
+    assert len(gate) == 4
+
+
+def test_a_refused_event_counts_against_no_key() -> None:
+    gate = RateGate(limit=2, window_seconds=60)
+    assert gate.allow("ip:a", "visitor", now=1)
+    assert gate.allow("ip:a", "visitor", now=2)
+    assert not gate.allow("ip:b", "visitor", now=3)
+    assert gate.allow("ip:b", "other", now=4)
+    assert gate.allow("ip:b", "another", now=5)
+    assert not gate.allow("ip:b", "third", now=6)
+
+
+def test_the_gate_holds_a_bounded_number_of_keys() -> None:
+    gate = RateGate(limit=5, window_seconds=60, max_keys=10)
+    accepted = [gate.allow(f"ip:{n}", f"visitor-{n}", now=1) for n in range(100)]
+    assert accepted.count(True) == 5
+    assert len(gate) == 10
+    assert gate.allow("ip:0", "visitor-0", now=2)
+    assert gate.allow("ip:late", "visitor-late", now=62)
+    assert len(gate) == 2
+
+
 def test_average_time_ignores_visits_that_left() -> None:
     assert average_engaged_ms(30_000, 2) == 15_000
     assert average_engaged_ms(30_000, 0) == 0
