@@ -5,7 +5,8 @@
 #
 # `docker compose --profile db up --build` also starts Postgres 18. On the first start of an
 # empty volume, docker/postgres/01-databases.sh creates the test and analytics databases.
-# Point the DOCKER_* URLs at db:5432 for that mode (password newsroom). Host port is 5434.
+# Point the DOCKER_* URLs at db:5432 for that mode. Host port is 5434. The password is
+# POSTGRES_PASSWORD from .env (default newsroom) and only takes effect on an empty volume.
 
 x-app: &app
   build: .
@@ -45,7 +46,7 @@ services:
     profiles: ["db"]
     environment:
       POSTGRES_USER: newsroom
-      POSTGRES_PASSWORD: newsroom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-newsroom}
       POSTGRES_DB: newsroom
     ports:
       - "5434:5432"
