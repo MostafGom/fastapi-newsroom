@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -12,7 +13,7 @@ from newsroom.analytics.ingest import EventBuffer
 from newsroom.analytics.partitions import ensure_partitions
 from newsroom.api import health
 from newsroom.api.v1 import router as api_v1_router
-from newsroom.core.config import Settings, get_settings
+from newsroom.core.config import Settings, get_settings, proxy_warnings
 from newsroom.core.db import create_analytics_engine, create_engine, create_sessionmaker
 from newsroom.core.errors import install_exception_handlers
 from newsroom.core.logging import configure_logging
@@ -37,6 +38,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        for warning in proxy_warnings(settings, os.environ):
+            structlog.get_logger("newsroom").warning("proxy_headers", detail=warning)
         engine = create_engine(settings)
         analytics_engine = create_analytics_engine(settings)
         app.state.engine = engine

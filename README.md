@@ -154,6 +154,12 @@ This does not start a database. It builds the image, then:
 The four databases in the SQL block above must already exist on that server. Create them
 yourself; `docker/postgres/01-databases.sh` is not used in this mode.
 
+**Behind a reverse proxy**, set `FORWARDED_ALLOW_IPS` in `.env` to the proxy's address or
+network (for example the Docker network, `172.18.0.0/16`). The image runs uvicorn with
+`--proxy-headers`, which trusts `X-Forwarded-For` only from those addresses. Without it, every
+visitor has the proxy's address, and login throttling and the analytics limit apply to the
+whole site at once. A production server logs a `proxy_headers` warning when it is unset.
+
 **Bundled Postgres** (no host database):
 
 ```bash
