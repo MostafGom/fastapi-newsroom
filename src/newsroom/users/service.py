@@ -12,10 +12,11 @@ from newsroom.auth.principal import Principal
 from newsroom.authz.authorizer import DbAuthorizer
 from newsroom.authz.models import Permission, Role, UserRole
 from newsroom.authz.permissions import SUPER_ADMIN_ROLE, Perm
-from newsroom.authz.policies import ensure_can_grant_role, ensure_outranks
+from newsroom.authz.policies import ensure_can_assign, ensure_outranks
 from newsroom.core.errors import Conflict, NotFound, PermissionDenied
 from newsroom.core.schemas import Page, PageParams, decode_cursor, encode_cursor
 from newsroom.core.security import hash_password
+from newsroom.taxonomy.models import Section
 from newsroom.users.models import ReaderProfile, StaffProfile, User, UserKind, UserStatus
 from newsroom.users.repository import UserRepository, normalize_email
 from newsroom.users.schemas import (
@@ -218,10 +219,23 @@ class UserService:
             raise NotFound("User not found")
         if user.kind is not UserKind.STAFF:
             raise PermissionDenied("Roles can only be granted to staff")
-        role = await self.db.scalar(select(Role).where(Role.key == payload.role_key))
+        role = await self.db.scalar(
+            select(Role).where(Role.key == payload.role_key).options(selectinload(Role.permissions))
+        )
         if role is None:
             raise NotFound(f"Unknown role '{payload.role_key}'")
-        await self._require_manage(actor, target=user, role_key=role.key, role_rank=role.rank)
+        if (
+            payload.section_id is not None
+            and await self.db.get(Section, payload.section_id) is None
+        ):
+            raise NotFound("Section not found")
+        await self._require_manage(actor, target=user, role_key=role.key)
+        ensure_can_assign(
+            actor.grants,
+            role_rank=role.rank,
+            role_permissions=[item.code for item in role.permissions],
+            section_id=payload.section_id,
+        )
         grant = UserRole(
             user_id=user.id,
             role_id=role.id,
@@ -260,8 +274,12 @@ class UserService:
         user = await self.users.get(user_id)
         if user is None:
             raise NotFound("User not found")
-        await self._require_manage(
-            actor, target=user, role_key=grant.role.key, role_rank=grant.role.rank
+        await self._require_manage(actor, target=user, role_key=grant.role.key)
+        ensure_can_assign(
+            actor.grants,
+            role_rank=grant.role.rank,
+            role_permissions=(),
+            section_id=grant.section_id,
         )
         if user.id == actor.user.id and grant.role.rank == actor.grants.max_rank:
             raise PermissionDenied("You cannot revoke your own highest role")
@@ -380,12 +398,9 @@ class UserService:
         *,
         target: User | None,
         role_key: str | None,
-        role_rank: int | None = None,
     ) -> None:
         if target is not None and target.id != actor.user.id:
             ensure_outranks(actor.grants, await DbAuthorizer(self.db).grants_for(target.id))
-        if role_rank is not None:
-            ensure_can_grant_role(actor.grants, role_rank)
 
     async def _ensure_not_last_super_admin(self, user: User) -> None:
         grants = await DbAuthorizer(self.db).grants_for(user.id)

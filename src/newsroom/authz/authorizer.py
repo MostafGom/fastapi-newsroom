@@ -44,6 +44,16 @@ class Grants:
     def all_permissions(self) -> frozenset[str]:
         return frozenset().union(*(g.permissions for g in self._grants))
 
+    def permissions_in(self, section_id: uuid.UUID | None) -> frozenset[str]:
+        """What applies there: global grants, plus that section's grants if one is named."""
+        return frozenset().union(
+            *(
+                g.permissions
+                for g in self._grants
+                if g.is_global or (section_id is not None and g.section_id == section_id)
+            )
+        )
+
     def has(self, perm: Perm, *, section_id: uuid.UUID | None = None) -> bool:
         """``section_id=None`` asks for a global grant; otherwise global or that section."""
         for grant in self._grants:
