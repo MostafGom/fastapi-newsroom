@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from typer.testing import CliRunner
 
 from newsroom import cli
@@ -5,7 +6,13 @@ from newsroom.core.config import Environment, Settings
 
 
 def test_seed_refuses_to_run_in_production(monkeypatch) -> None:
-    production = Settings(environment=Environment.PRODUCTION)
+    production = Settings(
+        environment=Environment.PRODUCTION,
+        debug=False,
+        secret_key=SecretStr("s" * 48),
+        cookie_secure=True,
+        public_base_url="https://news.example",
+    )
     monkeypatch.setattr(cli, "get_settings", lambda: production)
 
     async def must_not_run(*_args: object) -> list[str]:

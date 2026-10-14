@@ -24,7 +24,8 @@ from newsroom.seed.volume import seed_volume
 from newsroom.users.repository import UserRepository
 from newsroom.users.service import UserService
 
-app = typer.Typer(no_args_is_help=True, add_completion=False)
+# Locals would print settings, secrets included, on any failure.
+app = typer.Typer(no_args_is_help=True, add_completion=False, pretty_exceptions_show_locals=False)
 
 
 def run_with_db[T](fn: Callable[[AsyncSession], Awaitable[T]]) -> T:

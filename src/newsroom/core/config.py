@@ -1,8 +1,11 @@
+from collections.abc import Mapping
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
+from typing import Self
+from urllib.parse import urlsplit
 
-from pydantic import Field, PostgresDsn, SecretStr
+from pydantic import Field, PostgresDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +13,14 @@ class Environment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
     PRODUCTION = "production"
+
+
+class UnsafeSettings(RuntimeError):
+    """Not a ValueError: pydantic would wrap that and print every setting, secrets included."""
+
+
+_PLACEHOLDER_SECRETS = {"", "change-me", "change_me", "changeme", "secret"}
+_MIN_SECRET_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -78,6 +89,49 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
+
+    @model_validator(mode="after")
+    def _refuse_unsafe_production(self) -> Self:
+        """A production server does not start with development settings."""
+        if not self.is_production:
+            return self
+        problems: list[str] = []
+        if self.debug:
+            problems.append("DEBUG must be false (it shows tracebacks to visitors)")
+        secret = self.secret_key.get_secret_value()
+        if secret.strip().lower() in _PLACEHOLDER_SECRETS or len(secret) < _MIN_SECRET_LENGTH:
+            problems.append(
+                f"SECRET_KEY must be a random value of at least {_MIN_SECRET_LENGTH} characters"
+            )
+        if not self.cookie_secure:
+            problems.append("COOKIE_SECURE must be true (session cookies need HTTPS)")
+        if urlsplit(self.public_base_url).scheme != "https":
+            problems.append("PUBLIC_BASE_URL must start with https://")
+        if problems:
+            raise UnsafeSettings(
+                "Unsafe settings for ENVIRONMENT=production: " + "; ".join(problems)
+            )
+        return self
+
+
+def proxy_warnings(settings: Settings, environ: Mapping[str, str]) -> list[str]:
+    """Uvicorn reads FORWARDED_ALLOW_IPS itself; this only says when it looks wrong.
+
+    Without it, every visitor behind a reverse proxy has the proxy's address, so per-address
+    limits apply to the whole site. With ``*``, any client can claim any address.
+    """
+    trusted = environ.get("FORWARDED_ALLOW_IPS", "").strip()
+    if trusted == "*":
+        return [
+            "FORWARDED_ALLOW_IPS=* trusts X-Forwarded-For from every client; list the proxy "
+            "addresses instead unless port 8000 is reachable only from the proxy"
+        ]
+    if settings.is_production and not trusted:
+        return [
+            "FORWARDED_ALLOW_IPS is not set; behind a reverse proxy every visitor will have "
+            "the proxy's address. Set it to the proxy's address or network"
+        ]
+    return []
 
 
 @lru_cache
