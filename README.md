@@ -1,5 +1,7 @@
 # Newsroom
 
+> **Note:** Built by directing AI coding agents. I set the goals and requirements; the code is mostly AI-generated.
+
 Multilingual news publishing platform with a public site for readers, an editorial dashboard
 for staff, and a JSON API, all served by one FastAPI application.
 
